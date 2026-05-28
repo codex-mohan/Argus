@@ -75,7 +75,10 @@ export const Signal = z.object({
   severity: SignalSeverity,
   headline: z.string(),
   synthesis: z.string(),
-  source_urls: z.array(z.string().url()),
+  source_urls: z
+    .array(z.string().url())
+    .min(1)
+    .describe("Evidence URLs backing this signal"),
   confidence: z.number().min(0).max(1),
   agent_id: z.string(),
   detected_at: z.string().datetime(),
