@@ -14,7 +14,7 @@
     "fix": "ultracite fix",
     "lint": "bun run check",
     "typecheck": "turbo typecheck",
-    "prepare": "lefthook install"
+    "test": "turbo test"
   },
   "version": "0.1.0",
   "workspaces": [

@@ -1,6 +1,3 @@
-import { getBrightDataClient, getCogneeClient } from "./tools/health";
-import { createMarketDataBot } from "./agents/collection/market-data";
-
 const port = Number(process.env.PORT ?? "3001");
 
 async function main() {
@@ -8,36 +5,47 @@ async function main() {
   console.log("  ║        ARGUS — Agent Swarm        ║");
   console.log("  ╚══════════════════════════════════╝\n");
 
+  const { getBrightDataClient } = await import("./mcp/brightdata-client.ts");
+  const { getCogneeClient } = await import("./mcp/cognee-client.ts");
   const bd = getBrightDataClient();
   const cog = getCogneeClient();
 
-  // Health check
   const [bdHealth, cogHealth] = await Promise.all([bd.health(), cog.health()]);
-  console.log(`  Bright Data: ${bdHealth.available ? "✓ available" : "✗ unavailable — ${bdHealth.reason}"}`);
-  console.log(`  Cognee:      ${cogHealth.available ? "✓ available" : "✗ unavailable — ${cogHealth.reason}"}`);
+  const bdStatus = bdHealth.available
+    ? "available"
+    : `unavailable — ${bdHealth.reason ?? "unknown"}`;
+  const cogStatus = cogHealth.available
+    ? "available"
+    : `unavailable — ${cogHealth.reason ?? "unknown"}`;
+  console.log(`  Bright Data: ${bdHealth.available ? "✓" : "✗"} ${bdStatus}`);
+  console.log(`  Cognee:      ${cogHealth.available ? "✓" : "✗"} ${cogStatus}`);
 
   if (cogHealth.available) {
     console.log("  Memory mode: persistent (cross-agent)");
   } else {
-    console.log("  Memory mode: DEGRADED (in-session only, no cross-agent memory)");
+    console.log(
+      "  Memory mode: DEGRADED (in-session only, no cross-agent memory)"
+    );
   }
 
-  // Start HTTP server for SSE streaming + REST endpoints
-  const server = Bun.serve({
+  Bun.serve({
     port,
     routes: {
       "/health": async () => {
-        const [bd, cog] = await Promise.all([getBrightDataClient().health(), getCogneeClient().health()]);
-        return Response.json({ status: "ok", providers: { brightdata: bd, cognee: cog } });
-      },
-
-      "/api/signals": async () => {
-        // TODO: stream signals from active agents
-        return Response.json({ signals: [], cached: false });
-      },
-
-      "/api/agents/status": () => {
+        const [bdH, cogH] = await Promise.all([
+          getBrightDataClient().health(),
+          getCogneeClient().health(),
+        ]);
         return Response.json({
+          status: "ok",
+          providers: { brightdata: bdH, cognee: cogH },
+        });
+      },
+
+      "/api/signals": () => Response.json({ signals: [], cached: false }),
+
+      "/api/agents/status": () =>
+        Response.json({
           agents: [
             { id: "market-data-bot", status: "idle", last_run: null },
             { id: "filing-data-bot", status: "idle", last_run: null },
@@ -45,11 +53,10 @@ async function main() {
             { id: "supplier-data-bot", status: "idle", last_run: null },
             { id: "news-data-bot", status: "idle", last_run: null },
           ],
-        });
-      },
+        }),
     },
 
-    fetch(req) {
+    fetch(_req) {
       return new Response("Not found", { status: 404 });
     },
   });

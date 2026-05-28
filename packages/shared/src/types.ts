@@ -8,7 +8,15 @@ export const MemoryEntry = z.object({
   scraped_at: z.string().datetime(),
   agent_id: z.string(),
   confidence: z.number().min(0).max(1),
-  data_type: z.enum(["price", "filing", "social", "supplier", "news", "lens_finding", "correlation"]),
+  data_type: z.enum([
+    "price",
+    "filing",
+    "social",
+    "supplier",
+    "news",
+    "lens_finding",
+    "correlation",
+  ]),
   content: z.string().min(1),
   raw_extract: z.record(z.unknown()).optional(),
   ttl_hours: z.number().positive().optional(),
@@ -22,9 +30,22 @@ export const ScrapeStatus = z.enum(["success", "degraded", "unavailable"]);
 export type ScrapeStatus = z.infer<typeof ScrapeStatus>;
 
 export const ScrapeResult = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("success"), data: z.unknown(), source: z.string() }),
-  z.object({ status: z.literal("degraded"), data: z.unknown(), source: z.string(), originalUrl: z.string() }),
-  z.object({ status: z.literal("unavailable"), reason: z.string(), suggestion: z.string() }),
+  z.object({
+    status: z.literal("success"),
+    data: z.unknown(),
+    source: z.string(),
+  }),
+  z.object({
+    status: z.literal("degraded"),
+    data: z.unknown(),
+    source: z.string(),
+    originalUrl: z.string(),
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    reason: z.string(),
+    suggestion: z.string(),
+  }),
 ]);
 export type ScrapeResult = z.infer<typeof ScrapeResult>;
 
@@ -70,12 +91,14 @@ export const IntelligenceBrief = z.object({
   lens: SignalLens,
   executive_summary: z.string(),
   key_signals: z.array(Signal),
-  correlation_notes: z.array(z.object({
-    signal_a_id: z.string(),
-    signal_b_id: z.string(),
-    relationship: z.string(),
-    strength: z.number().min(0).max(1),
-  })),
+  correlation_notes: z.array(
+    z.object({
+      signal_a_id: z.string(),
+      signal_b_id: z.string(),
+      relationship: z.string(),
+      strength: z.number().min(0).max(1),
+    })
+  ),
   risk_score: z.number().min(0).max(100),
   recommendation: z.string(),
 });

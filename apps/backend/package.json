@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "build": "bun build src/server.ts --outdir dist --target node",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@brightdata/sdk": "latest",
@@ -14,10 +16,12 @@
     "@mohanscodex/spectra-ai": "^0.4.3",
     "@mohanscodex/spectra-app": "^0.4.3",
     "@modelcontextprotocol/sdk": "latest",
+    "@argus/shared": "workspace:*",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.5"
   }
 }

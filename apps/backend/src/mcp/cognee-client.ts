@@ -1,17 +1,7 @@
 import type { ProviderStatus } from "@argus/shared";
 
-interface McpToolCall {
-  tool: string;
-  arguments: Record<string, unknown>;
-}
-
-interface McpToolResult {
-  content: Array<{ type: string; text?: string; data?: string }>;
-  isError?: boolean;
-}
-
 class CogneeClient {
-  private baseUrl: string;
+  private readonly baseUrl: string;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -34,7 +24,9 @@ class CogneeClient {
       provider: "cognee",
       available,
       degraded: !available,
-      reason: available ? undefined : "Cognee MCP server unreachable — operating with degraded memory (in-session only)",
+      reason: available
+        ? undefined
+        : "Cognee MCP server unreachable — operating with degraded memory",
     };
   }
 
@@ -45,7 +37,7 @@ class CogneeClient {
     custom_prompt?: string;
   }): Promise<void> {
     try {
-      await this.callTool("remember", {
+      await this.call("remember", {
         data: args.data,
         dataset_name: args.dataset_name ?? "main_dataset",
         session_id: args.session_id,
@@ -63,22 +55,29 @@ class CogneeClient {
     top_k?: number;
   }): Promise<string[]> {
     try {
-      const result = await this.callTool("recall", {
+      const result = await this.call("recall", {
         query: args.query,
         datasets: args.datasets,
         session_id: args.session_id,
         top_k: args.top_k ?? 10,
       });
-      return result.content?.map((c) => c.text ?? "").filter(Boolean) ?? [];
+      return (
+        result.content
+          ?.map((c: { text?: string }) => c.text ?? "")
+          .filter(Boolean) ?? []
+      );
     } catch (err) {
       console.warn("[cognee] recall failed:", err);
       return [];
     }
   }
 
-  async improve(args: { dataset_name?: string; session_ids?: string }): Promise<void> {
+  async improve(args: {
+    dataset_name?: string;
+    session_ids?: string;
+  }): Promise<void> {
     try {
-      await this.callTool("improve", {
+      await this.call("improve", {
         dataset_name: args.dataset_name ?? "main_dataset",
         session_ids: args.session_ids,
       });
@@ -87,15 +86,21 @@ class CogneeClient {
     }
   }
 
-  async forget(args: { dataset?: string; everything?: boolean }): Promise<void> {
+  async forget(args: {
+    dataset?: string;
+    everything?: boolean;
+  }): Promise<void> {
     try {
-      await this.callTool("forget", args);
+      await this.call("forget", args);
     } catch (err) {
       console.warn("[cognee] forget failed:", err);
     }
   }
 
-  private async callTool(tool: string, args: Record<string, unknown>): Promise<McpToolResult> {
+  private async call(
+    tool: string,
+    args: Record<string, unknown>
+  ): Promise<{ content?: Array<{ text?: string }> }> {
     const response = await fetch(`${this.baseUrl}/tools/call`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,10 +109,12 @@ class CogneeClient {
     });
 
     if (!response.ok) {
-      throw new Error(`Cognee tool ${tool} failed: ${response.status} ${await response.text()}`);
+      throw new Error(
+        `Cognee tool ${tool} failed: ${response.status} ${await response.text()}`
+      );
     }
 
-    return response.json() as Promise<McpToolResult>;
+    return response.json() as Promise<{ content?: Array<{ text?: string }> }>;
   }
 }
 

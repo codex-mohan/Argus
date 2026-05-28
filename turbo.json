@@ -12,6 +12,11 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
+    "test": {},
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
     "//#check": {},
     "//#fix": {
       "cache": false

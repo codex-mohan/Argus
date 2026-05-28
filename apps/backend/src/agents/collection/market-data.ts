@@ -1,11 +1,11 @@
 import { Agent } from "@mohanscodex/spectra-agent";
 import {
-  scrapePageTool,
-  searchWebTool,
   getAmazonProductTool,
   recallContextTool,
   rememberFindingTool,
-} from "../tools/registry";
+  scrapePageTool,
+  searchWebTool,
+} from "../../tools/registry.ts";
 
 export function createMarketDataBot(): Agent {
   return new Agent({
@@ -30,9 +30,15 @@ export function createMarketDataBot(): Agent {
       "- If a scrape fails, report the failure — never invent data",
       "- Before scraping, check Cognee via recall_context to avoid re-scraping the same URL",
       "",
-      "OUTPUT FORMAT: Store each finding as a JSON object in Cognee via remember_finding with:",
+      "OUTPUT FORMAT: Store each finding in Cognee via remember_finding with:",
       "  source_url, scraped_at, agent_id: 'market-data-bot', confidence, data_type: 'price', content",
     ].join("\n"),
-    tools: [scrapePageTool, searchWebTool, getAmazonProductTool, recallContextTool, rememberFindingTool],
+    tools: [
+      scrapePageTool,
+      searchWebTool,
+      getAmazonProductTool,
+      recallContextTool,
+      rememberFindingTool,
+    ],
   });
 }

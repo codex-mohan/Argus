@@ -1,8 +1,8 @@
+import { MemoryEntry } from "@argus/shared";
 import { defineTool } from "@mohanscodex/spectra-agent";
 import { z } from "zod";
-import { getBrightDataClient } from "../mcp/brightdata-client";
-import { getCogneeClient } from "../mcp/cognee-client";
-import { MemoryEntry } from "@argus/shared";
+import { getBrightDataClient } from "../mcp/brightdata-client.ts";
+import { getCogneeClient } from "../mcp/cognee-client.ts";
 
 const bd = getBrightDataClient;
 const cog = getCogneeClient;
@@ -39,7 +39,10 @@ export const getLinkedInProfileTool = defineTool({
   parameters: z.object({ profileUrl: z.string().url() }),
   execute: async ({ profileUrl }) => {
     const client = bd();
-    const result = await client.structuredScrape("web_data_linkedin_person_profile", { url: profileUrl });
+    const result = await client.structuredScrape(
+      "web_data_linkedin_person_profile",
+      { url: profileUrl }
+    );
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   },
 });
@@ -50,7 +53,10 @@ export const getLinkedInCompanyTool = defineTool({
   parameters: z.object({ companyUrl: z.string().url() }),
   execute: async ({ companyUrl }) => {
     const client = bd();
-    const result = await client.structuredScrape("web_data_linkedin_company_profile", { url: companyUrl });
+    const result = await client.structuredScrape(
+      "web_data_linkedin_company_profile",
+      { url: companyUrl }
+    );
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   },
 });
@@ -61,7 +67,9 @@ export const getAmazonProductTool = defineTool({
   parameters: z.object({ productUrl: z.string().url() }),
   execute: async ({ productUrl }) => {
     const client = bd();
-    const result = await client.structuredScrape("web_data_amazon_product", { url: productUrl });
+    const result = await client.structuredScrape("web_data_amazon_product", {
+      url: productUrl,
+    });
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   },
 });
@@ -73,7 +81,9 @@ export const getAmazonProductTool = defineTool({
 export const rememberFindingTool = defineTool({
   name: "remember_finding",
   description: "Store a finding in Cognee persistent memory",
-  parameters: MemoryEntry.extend({ dataset: z.string().default("lens_findings") }),
+  parameters: MemoryEntry.extend({
+    dataset: z.string().default("lens_findings"),
+  }),
   execute: async (entry) => {
     const client = cog();
     await client.remember({
@@ -87,7 +97,11 @@ export const rememberFindingTool = defineTool({
 export const recallContextTool = defineTool({
   name: "recall_context",
   description: "Recall relevant context from Cognee memory",
-  parameters: z.object({ query: z.string(), datasets: z.string().optional(), top_k: z.number().default(5) }),
+  parameters: z.object({
+    query: z.string(),
+    datasets: z.string().optional(),
+    top_k: z.number().default(5),
+  }),
   execute: async ({ query, datasets, top_k }) => {
     const client = cog();
     const results = await client.recall({ query, datasets, top_k });

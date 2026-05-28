@@ -1,18 +1,8 @@
 import type { ProviderStatus, ScrapeResult } from "@argus/shared";
 
-interface McpToolCall {
-  tool: string;
-  arguments: Record<string, unknown>;
-}
-
-interface McpToolResult {
-  content: Array<{ type: string; text?: string; data?: string }>;
-  isError?: boolean;
-}
-
 class McpClient {
-  private baseUrl: string;
-  private token: string;
+  private readonly baseUrl: string;
+  private readonly token: string;
 
   constructor(baseUrl: string, token: string) {
     this.baseUrl = baseUrl;
@@ -40,7 +30,58 @@ class McpClient {
     };
   }
 
-  async callTool(tool: string, args: Record<string, unknown>): Promise<McpToolResult> {
+  async scrapeAsMarkdown(url: string): Promise<ScrapeResult> {
+    try {
+      const result = await this.call("scrape_as_markdown", { url });
+      const text = result.content?.[0]?.text ?? "";
+      return { status: "success", data: text, source: "brightdata_mcp" };
+    } catch (err) {
+      return {
+        status: "unavailable",
+        reason: String(err),
+        suggestion:
+          "Retry with escalation: scrape_as_markdown → scraping_browser → web_unlocker",
+      };
+    }
+  }
+
+  async search(query: string): Promise<ScrapeResult> {
+    try {
+      const result = await this.call("search_engine", { query });
+      return { status: "success", data: result, source: "brightdata_serp" };
+    } catch (err) {
+      return {
+        status: "unavailable",
+        reason: String(err),
+        suggestion: "SERP API unavailable — try direct URL scraping",
+      };
+    }
+  }
+
+  async structuredScrape(
+    toolName: string,
+    params: Record<string, unknown>
+  ): Promise<ScrapeResult> {
+    try {
+      const result = await this.call(toolName, params);
+      return {
+        status: "success",
+        data: result,
+        source: `brightdata_${toolName}`,
+      };
+    } catch (err) {
+      return {
+        status: "unavailable",
+        reason: String(err),
+        suggestion: `Structured extractor ${toolName} unavailable — fall back to scrape_as_markdown`,
+      };
+    }
+  }
+
+  private async call(
+    tool: string,
+    args: Record<string, unknown>
+  ): Promise<{ content?: Array<{ text?: string }> }> {
     const response = await fetch(`${this.baseUrl}/tools/call`, {
       method: "POST",
       headers: {
@@ -52,50 +93,12 @@ class McpClient {
     });
 
     if (!response.ok) {
-      throw new Error(`MCP tool ${tool} failed: ${response.status} ${await response.text()}`);
+      throw new Error(
+        `MCP tool ${tool} failed: ${response.status} ${await response.text()}`
+      );
     }
 
-    return response.json() as Promise<McpToolResult>;
-  }
-
-  async scrapeAsMarkdown(url: string): Promise<ScrapeResult> {
-    try {
-      const result = await this.callTool("scrape_as_markdown", { url });
-      const text = result.content?.[0]?.text ?? "";
-      return { status: "success", data: text, source: "brightdata_mcp" };
-    } catch (err) {
-      return {
-        status: "unavailable",
-        reason: String(err),
-        suggestion: "Retry with escalation: scrape_as_markdown → scraping_browser → web_unlocker",
-      };
-    }
-  }
-
-  async search(query: string): Promise<ScrapeResult> {
-    try {
-      const result = await this.callTool("search_engine", { query });
-      return { status: "success", data: result, source: "brightdata_serp" };
-    } catch (err) {
-      return {
-        status: "unavailable",
-        reason: String(err),
-        suggestion: "SERP API unavailable — try direct URL scraping",
-      };
-    }
-  }
-
-  async structuredScrape(toolName: string, params: Record<string, unknown>): Promise<ScrapeResult> {
-    try {
-      const result = await this.callTool(toolName, params);
-      return { status: "success", data: result, source: `brightdata_${toolName}` };
-    } catch (err) {
-      return {
-        status: "unavailable",
-        reason: String(err),
-        suggestion: `Structured extractor ${toolName} unavailable — fall back to scrape_as_markdown`,
-      };
-    }
+    return response.json() as Promise<{ content?: Array<{ text?: string }> }>;
   }
 }
 
