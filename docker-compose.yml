@@ -1,0 +1,57 @@
+services:
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: argus-backend
+    ports:
+      - "3001:3001"
+    environment:
+      BRIGHTDATA_API_KEY: "${BRIGHTDATA_API_KEY}"
+      AIMLAPI_KEY: "${AIMLAPI_KEY}"
+      OPENAI_BASE_URL: "https://api.aimlapi.com/v1"
+      OPENAI_API_KEY: "${AIMLAPI_KEY}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      COGNEE_MCP_URL: "http://cognee-mcp:8000"
+      SPEECHMATICS_API_KEY: "${SPEECHMATICS_API_KEY:-}"
+      TRIGGERWARE_KEY: "${TRIGGERWARE_KEY:-}"
+    depends_on:
+      - cognee-mcp
+    networks:
+      - argus_internal
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: argus-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    depends_on:
+      - backend
+    networks:
+      - argus_internal
+
+  cognee-mcp:
+    image: cognee/cognee-mcp:main
+    container_name: argus-cognee
+    ports:
+      - "8000:8000"
+    environment:
+      TRANSPORT_MODE: "http"
+      LLM_API_KEY: "${AIMLAPI_KEY}"
+      LLM_PROVIDER: "openai"
+      LLM_MODEL: "gpt-4o-mini"
+    volumes:
+      - cognee_data:/app/data
+    networks:
+      - argus_internal
+
+volumes:
+  cognee_data:
+
+networks:
+  argus_internal:
+    driver: bridge
