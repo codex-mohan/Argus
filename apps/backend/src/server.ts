@@ -1,57 +1,99 @@
-const port = Number(process.env.PORT ?? "3001");
+import {
+  connectMcpServer,
+  disconnectAllMcp,
+  type McpServerConfig,
+} from "./mcp/bridge.ts";
+import { registerAimlApiProvider } from "./providers/aimlapi.ts";
+
+const PORT = Number(process.env.PORT ?? "3001");
 
 async function main() {
   console.log("\n  ╔══════════════════════════════════╗");
-  console.log("  ║        ARGUS — Agent Swarm        ║");
+  console.log("  ║      ARGUS — Agent Swarm         ║");
   console.log("  ╚══════════════════════════════════╝\n");
 
-  const { getBrightDataClient } = await import("./mcp/brightdata-client.ts");
-  const { getCogneeClient } = await import("./mcp/cognee-client.ts");
-  const bd = getBrightDataClient();
-  const cog = getCogneeClient();
+  // 1. Register AI/ML API provider
+  registerAimlApiProvider();
+  console.log("  model: moonshotai/kimi-k2.6 (AI/ML API)");
 
-  const [bdHealth, cogHealth] = await Promise.all([bd.health(), cog.health()]);
-  const bdStatus = bdHealth.available
-    ? "available"
-    : `unavailable — ${bdHealth.reason ?? "unknown"}`;
-  const cogStatus = cogHealth.available
-    ? "available"
-    : `unavailable — ${cogHealth.reason ?? "unknown"}`;
-  console.log(`  Bright Data: ${bdHealth.available ? "✓" : "✗"} ${bdStatus}`);
-  console.log(`  Cognee:      ${cogHealth.available ? "✓" : "✗"} ${cogStatus}`);
+  // 2. Connect MCP servers
+  const brightDataKey = process.env.BRIGHTDATA_API_KEY;
+  const cogneeUrl = process.env.COGNEE_MCP_URL ?? "http://localhost:8000";
 
-  if (cogHealth.available) {
-    console.log("  Memory mode: persistent (cross-agent)");
+  const mcpServers: McpServerConfig[] = [];
+
+  if (brightDataKey) {
+    mcpServers.push({
+      name: "brightdata",
+      url: `https://mcp.brightdata.com/mcp?token=${brightDataKey}`,
+    });
   } else {
-    console.log(
-      "  Memory mode: DEGRADED (in-session only, no cross-agent memory)"
-    );
+    console.warn("  ✗ BRIGHTDATA_API_KEY not set — Bright Data MCP disabled");
   }
 
+  mcpServers.push({
+    name: "cognee",
+    url: cogneeUrl,
+  });
+
+  let brightDataTools = 0;
+  let cogneeTools = 0;
+
+  for (const cfg of mcpServers) {
+    try {
+      const tools = await connectMcpServer(cfg);
+      if (cfg.name === "brightdata") {
+        brightDataTools = tools.length;
+      }
+      if (cfg.name === "cognee") {
+        cogneeTools = tools.length;
+      }
+    } catch (err) {
+      console.error(
+        `  ✗ ${cfg.name}: connection failed — ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  console.log(
+    `  Bright Data: ${brightDataTools > 0 ? `✓ ${brightDataTools} tools` : "✗ unavailable"}`
+  );
+  console.log(
+    `  Cognee:      ${cogneeTools > 0 ? `✓ ${cogneeTools} tools` : "✗ unavailable"}`
+  );
+
+  // 3. Start HTTP server
   Bun.serve({
-    port,
+    port: PORT,
     routes: {
-      "/health": async () => {
-        const [bdH, cogH] = await Promise.all([
-          getBrightDataClient().health(),
-          getCogneeClient().health(),
-        ]);
-        return Response.json({
+      "/health": () =>
+        Response.json({
           status: "ok",
-          providers: { brightdata: bdH, cognee: cogH },
-        });
-      },
+          model: "moonshotai/kimi-k2.6",
+          mcp: {
+            brightdata: {
+              connected: brightDataTools > 0,
+              tools: brightDataTools,
+            },
+            cognee: { connected: cogneeTools > 0, tools: cogneeTools },
+          },
+        }),
 
       "/api/signals": () => Response.json({ signals: [], cached: false }),
 
       "/api/agents/status": () =>
         Response.json({
           agents: [
-            { id: "market-data-bot", status: "idle", last_run: null },
-            { id: "filing-data-bot", status: "idle", last_run: null },
-            { id: "social-data-bot", status: "idle", last_run: null },
-            { id: "supplier-data-bot", status: "idle", last_run: null },
-            { id: "news-data-bot", status: "idle", last_run: null },
+            { id: "market-data-bot", status: "idle" },
+            { id: "filing-data-bot", status: "idle" },
+            { id: "social-data-bot", status: "idle" },
+            { id: "supplier-data-bot", status: "idle" },
+            { id: "news-data-bot", status: "idle" },
+            { id: "gtm-lens", status: "idle" },
+            { id: "finance-lens", status: "idle" },
+            { id: "security-lens", status: "idle" },
+            { id: "correlation-engine", status: "idle" },
+            { id: "brief-writer", status: "idle" },
           ],
         }),
     },
@@ -61,10 +103,15 @@ async function main() {
     },
   });
 
-  console.log(`\n  ✓ Server running on http://localhost:${port}\n`);
+  console.log(`\n  ✓ Server running on http://localhost:${PORT}\n`);
 }
 
 main().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
+});
+
+process.on("SIGINT", async () => {
+  await disconnectAllMcp();
+  process.exit(0);
 });

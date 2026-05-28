@@ -7,5 +7,12 @@
   ],
   "javascript": {
     "globals": ["Bun"]
+  },
+  "linter": {
+    "rules": {
+      "correctness": {
+        "noUnresolvedImports": "off"
+      }
+    }
   }
 }

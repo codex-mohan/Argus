@@ -15,8 +15,9 @@
     "@mohanscodex/spectra-agent": "^0.4.3",
     "@mohanscodex/spectra-ai": "^0.4.3",
     "@mohanscodex/spectra-app": "^0.4.3",
-    "@modelcontextprotocol/sdk": "latest",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@argus/shared": "workspace:*",
+    "openai": "^5.3.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
