@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/server.ts",
-    "build": "bun build src/server.ts --outdir dist --target node",
+    "dev": "node --watch --experimental-strip-types src/server.ts",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -16,7 +16,7 @@
     "@mohanscodex/spectra-ai": "^0.4.3",
     "@mohanscodex/spectra-app": "^0.4.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@argus/shared": "workspace:*",
+    "@argus/shared": "file:../../packages/shared",
     "openai": "^5.3.0",
     "zod": "^3.25.0"
   },

@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import {
   connectMcpServer,
   disconnectAllMcp,
@@ -63,11 +64,14 @@ async function main() {
   );
 
   // 3. Start HTTP server
-  Bun.serve({
-    port: PORT,
-    routes: {
-      "/health": () =>
-        Response.json({
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? "", `http://localhost:${PORT}`);
+    res.setHeader("Content-Type", "application/json");
+
+    if (url.pathname === "/health") {
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
           status: "ok",
           model: "moonshotai/kimi-k2.6",
           mcp: {
@@ -77,12 +81,21 @@ async function main() {
             },
             cognee: { connected: cogneeTools > 0, tools: cogneeTools },
           },
-        }),
+        })
+      );
+      return;
+    }
 
-      "/api/signals": () => Response.json({ signals: [], cached: false }),
+    if (url.pathname === "/api/signals") {
+      res.writeHead(200);
+      res.end(JSON.stringify({ signals: [], cached: false }));
+      return;
+    }
 
-      "/api/agents/status": () =>
-        Response.json({
+    if (url.pathname === "/api/agents/status") {
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
           agents: [
             { id: "market-data-bot", status: "idle" },
             { id: "filing-data-bot", status: "idle" },
@@ -95,15 +108,18 @@ async function main() {
             { id: "correlation-engine", status: "idle" },
             { id: "brief-writer", status: "idle" },
           ],
-        }),
-    },
+        })
+      );
+      return;
+    }
 
-    fetch(_req) {
-      return new Response("Not found", { status: 404 });
-    },
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not found");
   });
 
-  console.log(`\n  ✓ Server running on http://localhost:${PORT}\n`);
+  server.listen(PORT, () => {
+    console.log(`\n  ✓ Server running on http://localhost:${PORT}\n`);
+  });
 }
 
 main().catch((err) => {
