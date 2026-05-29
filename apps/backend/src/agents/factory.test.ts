@@ -6,6 +6,7 @@ describe("Collection agent factory", () => {
   it("creates an agent without throwing", () => {
     expect(() =>
       createCollectionAgent({
+        agentId: "test-bot",
         name: "TestBot",
         systemPrompt: ["You are a test agent."],
       })
@@ -14,6 +15,7 @@ describe("Collection agent factory", () => {
 
   it("agent is defined after creation", () => {
     const agent = createCollectionAgent({
+      agentId: "prompt-bot",
       name: "PromptBot",
       systemPrompt: ["You are helpful."],
     });
@@ -22,6 +24,7 @@ describe("Collection agent factory", () => {
 
   it("accepts empty MCP server list", () => {
     const agent = createCollectionAgent({
+      agentId: "no-source-bot",
       name: "NoSourceBot",
       systemPrompt: ["test"],
       mcpServers: [],
@@ -37,6 +40,7 @@ describe("Collection agent factory", () => {
       execute: async () => ({ content: [{ type: "text", text: "checked" }] }),
     };
     const agent = createCollectionAgent({
+      agentId: "tool-bot",
       name: "ToolBot",
       systemPrompt: ["test"],
       mcpServers: [],

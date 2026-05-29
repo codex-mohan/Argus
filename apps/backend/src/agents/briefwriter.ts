@@ -1,0 +1,213 @@
+/// <reference types="bun" />
+
+/**
+ * Brief Writer — Event-driven executive brief composition
+ *
+ * Subscribes to ConvergenceDetected events with verdict="converged".
+ * Composes polished intelligence briefs from correlated signals.
+ */
+
+import { Agent } from "@mohanscodex/spectra-agent";
+import { resolveAgentModel } from "../config/store.ts";
+import type {
+  BriefReady,
+  Contradiction,
+  ConvergenceDetected,
+  ExecutiveBrief,
+  LensFinding,
+} from "../events.ts";
+import { emit, emitStep, on } from "../events.ts";
+import { persistBrief } from "../state.ts";
+
+function getBriefAgent(): Agent {
+  const model = resolveAgentModel("brief-writer");
+  return new Agent({
+    model,
+    systemPrompt: `You are the Argus Brief Writer. Synthesize correlated intelligence signals into executive briefs.
+Rules:
+- Headline: Compelling one-liner
+- Summary: 2-3 paragraphs max
+- Key findings: 3-5 bullets with lens attribution
+- Risk score: 0-100
+- Recommendation: Concrete action
+- Every claim must cite a source URL`,
+    tools: [],
+  });
+}
+
+on("convergence_detected", async (event: ConvergenceDetected) => {
+  const { runId, company, signals, compositeScore, contradictions } = event;
+
+  // Only write briefs for actual convergences (not contradictions or insufficient)
+  if (event.verdict !== "converged" || compositeScore < 60) {
+    emitStep(
+      runId,
+      "brief-writer",
+      1,
+      "Skip",
+      `Skipping brief for ${company}: ${event.verdict} (score ${compositeScore})`,
+      "skipped",
+      100
+    );
+    return;
+  }
+
+  emitStep(
+    runId,
+    "brief-writer",
+    1,
+    "Compose",
+    `Composing executive brief for ${company}...`,
+    "running",
+    50
+  );
+
+  // Build prompt from signals
+  const signalsText = signals
+    .map(
+      (s: LensFinding, i: number) =>
+        `[Signal ${i + 1}] ${s.headline}\nSynthesis: ${s.synthesis}\nConfidence: ${s.confidence}\nSources: ${s.sourceUrls.join(", ")}`
+    )
+    .join("\n\n");
+
+  const contradictionText =
+    contradictions.length > 0
+      ? `\n\nCONTRADICTIONS DETECTED:\n${contradictions.map((c: Contradiction) => `- ${c.lensA} vs ${c.lensB}: ${c.description} (${c.severity})`).join("\n")}`
+      : "";
+
+  const prompt = `Write an executive intelligence brief for ${company}.
+
+CORRELATED SIGNALS:\n${signalsText}${contradictionText}
+
+COMPOSITE SCORE: ${compositeScore}/100
+
+Format:
+HEADLINE: ...
+SUMMARY: ...
+KEY_FINDINGS:
+- ...
+RISK_SCORE: 0-100
+RECOMMENDATION: ...`;
+
+  let headline = `${company} Intelligence Brief`;
+  let summary = `Multiple intelligence lenses have converged on signals for ${company}.`;
+  let keyFindings: string[] = signals.map((s: LensFinding) => s.headline);
+  let riskScore = compositeScore;
+  let recommendation = "Monitor situation and await further intelligence.";
+
+  try {
+    const events: unknown[] = [];
+    for await (const event of getBriefAgent().run(prompt)) {
+      events.push(event);
+    }
+
+    // Extract text
+    let text = "";
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i] as Record<string, unknown>;
+      if (e.type === "done") {
+        const msg = e.message as Record<string, unknown>;
+        const blocks =
+          (msg.content as Array<{ type: string; text?: string }>) ?? [];
+        text = blocks
+          .filter((b) => b.type === "text")
+          .map((b) => b.text ?? "")
+          .join("");
+        break;
+      }
+    }
+
+    if (text) {
+      const hl = text.match(/HEADLINE:\s*(.+)/i);
+      const sum = text.match(
+        /SUMMARY:\s*([\s\S]+?)(?=KEY_FINDINGS:|RISK_SCORE:|$)/i
+      );
+      const kf = text.match(
+        /KEY_FINDINGS:\s*([\s\S]+?)(?=RISK_SCORE:|RECOMMENDATION:|$)/i
+      );
+      const rs = text.match(/RISK_SCORE:\s*(\d+)/i);
+      const rec = text.match(/RECOMMENDATION:\s*(.+)/i);
+
+      if (hl) {
+        headline = hl[1]!.trim();
+      }
+      if (sum) {
+        summary = sum[1]!.trim();
+      }
+      if (kf) {
+        keyFindings = kf[1]!
+          .split("\n")
+          .map((l) => l.trim().replace(/^-\s*/, ""))
+          .filter((l) => l.length > 0);
+      }
+      if (rs) {
+        riskScore = Number.parseInt(rs[1]!, 10);
+      }
+      if (rec) {
+        recommendation = rec[1]!.trim();
+      }
+    }
+  } catch (err) {
+    console.error("[brief-writer] LLM failed:", err);
+  }
+
+  const brief: ExecutiveBrief = {
+    headline,
+    summary,
+    keyFindings,
+    riskScore,
+    recommendation,
+    sources: [
+      ...new Set(signals.flatMap((s: LensFinding) => s.sourceUrls)),
+    ].slice(0, 10),
+  };
+
+  // Persist
+  persistBrief(runId, company, {
+    company,
+    generated_at: new Date().toISOString(),
+    lens: "finance",
+    executive_summary: summary,
+    key_signals: signals.map((s: LensFinding) => ({
+      id: `brief_sig_${Date.now()}`,
+      lens: "finance",
+      severity: "medium",
+      headline: s.headline,
+      synthesis: s.synthesis,
+      source_urls: s.sourceUrls,
+      confidence: s.confidence,
+      agent_id: "brief-writer",
+      detected_at: new Date().toISOString(),
+    })),
+    correlation_notes: contradictions.map((c: Contradiction) => ({
+      signal_a_id: c.lensA,
+      signal_b_id: c.lensB,
+      relationship: c.description,
+      strength: c.severity === "major" ? 0.3 : 0.6,
+    })),
+    risk_score: riskScore,
+    recommendation,
+  });
+
+  emitStep(
+    runId,
+    "brief-writer",
+    2,
+    "Complete",
+    `Brief ready for ${company}: ${headline.slice(0, 60)}`,
+    "success",
+    100
+  );
+
+  const ready: BriefReady = {
+    type: "brief_ready",
+    runId,
+    company,
+    brief,
+    timestamp: new Date().toISOString(),
+  };
+
+  emit(ready);
+});
+
+console.log("[agents/briefwriter] BriefWriter registered");

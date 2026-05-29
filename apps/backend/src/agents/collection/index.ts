@@ -1,6 +1,7 @@
 import { createCollectionAgent } from "../factory.ts";
 
 export const marketDataBot = createCollectionAgent({
+  agentId: "market-data-bot",
   name: "MarketDataBot",
   systemPrompt: [
     "You are MarketDataBot. You collect real-time pricing and product data from e-commerce platforms.",
@@ -29,6 +30,7 @@ export const marketDataBot = createCollectionAgent({
 });
 
 export const filingDataBot = createCollectionAgent({
+  agentId: "filing-data-bot",
   name: "FilingDataBot",
   systemPrompt: [
     "You are FilingDataBot. You monitor SEC EDGAR, regulatory databases, and financial disclosures.",
@@ -53,6 +55,7 @@ export const filingDataBot = createCollectionAgent({
 });
 
 export const socialDataBot = createCollectionAgent({
+  agentId: "social-data-bot",
   name: "SocialDataBot",
   systemPrompt: [
     "You are SocialDataBot. You monitor professional networks, social platforms, and forums for signals.",
@@ -84,6 +87,7 @@ export const socialDataBot = createCollectionAgent({
 });
 
 export const supplierDataBot = createCollectionAgent({
+  agentId: "supplier-data-bot",
   name: "SupplierDataBot",
   systemPrompt: [
     "You are SupplierDataBot. You monitor the financial health, stability, and risk signals of suppliers.",
@@ -113,6 +117,7 @@ export const supplierDataBot = createCollectionAgent({
 });
 
 export const newsDataBot = createCollectionAgent({
+  agentId: "news-data-bot",
   name: "NewsDataBot",
   systemPrompt: [
     "You are NewsDataBot. You monitor financial news, industry publications, and macro indicators.",

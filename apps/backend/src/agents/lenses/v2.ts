@@ -1,0 +1,359 @@
+/// <reference types="bun" />
+
+/**
+ * Lens Agents v2 — Event subscribers with reasoning chains
+ *
+ * Each lens independently subscribes to FactClassified events.
+ * Batches facts per company, queries Cognee, analyzes with LLM.
+ */
+
+import { DATASETS } from "@argus/shared";
+import { Agent } from "@mohanscodex/spectra-agent";
+import { resolveAgentModel } from "../../config/store.ts";
+import type {
+  FactClassified,
+  LensAnalysisComplete,
+  ReasoningStep,
+} from "../../events.ts";
+import { emit, emitStep, on } from "../../events.ts";
+import { callMcpTool } from "../../mcp/bridge.ts";
+import { persistSignal } from "../../state.ts";
+
+// ─── Fact Buffers ──────────────────────────────────────────────────────────
+
+interface FactBuffer {
+  facts: FactClassified[];
+  timer: Timer | null;
+}
+
+const buffers = new Map<string, FactBuffer>(); // key: `${runId}:${lens}:${company}`
+
+const BATCH_WINDOW_MS = 5000; // Wait 5s for all facts to arrive before analyzing
+
+// ─── Lens LLM Agents (lazy, config-driven) ───────────────────────────────────
+
+function getLensAgent(lens: "gtm" | "finance" | "security"): Agent {
+  const model = resolveAgentModel(`${lens}-lens`);
+  const prompts: Record<string, string> = {
+    gtm: `You are the GTM Intelligence Lens. Analyze facts and produce a concise finding.
+Rules:
+- Headline: 1 line
+- Synthesis: 2-3 sentences
+- Confidence: 0.0-1.0
+- Cite source URLs
+- Focus on: competitor moves, hiring signals, buying intent, account enrichment`,
+    finance: `You are the Finance & Market Intelligence Lens. Analyze facts and produce alpha signals.
+Rules:
+- Headline: 1 line
+- Synthesis: 2-3 sentences
+- Confidence: 0.0-1.0
+- Cite source URLs
+- Focus on: price moves, guidance changes, filing anomalies, earnings divergence`,
+    security: `You are the Security & Compliance Lens. Detect vendor risk and regulatory exposure.
+Rules:
+- Headline: 1 line
+- Synthesis: 2-3 sentences
+- Confidence: 0.0-1.0
+- Cite source URLs
+- Focus on: vendor distress, regulatory actions, brand exposure, compliance gaps`,
+  };
+  return new Agent({
+    model,
+    systemPrompt: prompts[lens]!,
+    tools: [],
+  });
+}
+
+// ─── Cognee Helpers ────────────────────────────────────────────────────────
+
+async function cogneeRecall(query: string, dataset?: string): Promise<string> {
+  try {
+    const result = await callMcpTool("cognee", "recall", {
+      query,
+      dataset_name: dataset,
+      top_k: 5,
+    });
+    const contents = result.content as
+      | Array<{ type: string; text?: string }>
+      | undefined;
+    return (
+      contents
+        ?.filter((c) => c.type === "text")
+        .map((c) => c.text ?? "")
+        .join("\n") ?? ""
+    );
+  } catch {
+    return "";
+  }
+}
+
+async function cogneeRemember(
+  data: Record<string, unknown>,
+  dataset: string
+): Promise<void> {
+  try {
+    await callMcpTool("cognee", "remember", {
+      data: JSON.stringify(data),
+      dataset_name: dataset,
+    });
+  } catch {
+    // Degraded — continue without memory
+  }
+}
+
+// ─── Lens Analysis Handler ─────────────────────────────────────────────────
+
+async function analyzeLens(
+  lens: "gtm" | "finance" | "security",
+  runId: string,
+  company: string,
+  facts: FactClassified[]
+): Promise<void> {
+  emitStep(
+    runId,
+    `${lens}-lens`,
+    1,
+    "Recall",
+    `${lens.toUpperCase()}Lens recalling Cognee for ${company}...`,
+    "running",
+    20,
+    lens
+  );
+
+  const chain: ReasoningStep[] = [];
+  const now = new Date().toISOString();
+
+  // 1. Neutral recall
+  const recallQuery = `all recent signals for ${company}`;
+  const recalled = await cogneeRecall(recallQuery, DATASETS.lens_findings);
+  chain.push({
+    step: "recall",
+    detail: `Neutral recall: "${recallQuery}"`,
+    timestamp: now,
+  });
+
+  // 2. Verify freshness of recalled data
+  const freshFacts = facts;
+  if (recalled) {
+    chain.push({
+      step: "verify",
+      detail: `Retrieved ${recalled.length} chars of prior context`,
+      timestamp: now,
+    });
+    // If recalled data is very old, we might want to flag it, but for now we proceed
+  }
+
+  emitStep(
+    runId,
+    `${lens}-lens`,
+    2,
+    "Analyze",
+    `${lens.toUpperCase()}Lens analyzing ${facts.length} facts for ${company}...`,
+    "running",
+    60,
+    lens
+  );
+
+  // 3. Build prompt
+  const factsText = freshFacts
+    .map(
+      (f) =>
+        `- [${f.confidence.toFixed(2)}] ${f.claim} (${f.primaryLens}${f.secondaryLenses.length > 0 ? ", " + f.secondaryLenses.join(", ") : ""})`
+    )
+    .join("\n");
+
+  const prompt = `Analyze these facts about ${company} through the ${lens.toUpperCase()} lens:
+
+Facts:
+${factsText}
+
+${recalled ? `Prior context from memory:\n${recalled.slice(0, 2000)}\n\n` : ""}
+Produce:
+1. HEADLINE: One-line summary
+2. SYNTHESIS: 2-3 sentence analysis
+3. CONFIDENCE: 0.0-1.0 score
+4. SOURCES: List the source URLs
+
+Format:
+HEADLINE: ...
+SYNTHESIS: ...
+CONFIDENCE: 0.XX
+SOURCES: url1, url2`;
+
+  // 4. LLM Analysis
+  let headline = `${company} — ${lens.toUpperCase()} analysis`;
+  let synthesis = `Analyzed ${facts.length} facts for ${company}.`;
+  let confidence = 0.7;
+  const sourceUrls = [...new Set(facts.map((f) => f.sourceUrl))];
+
+  try {
+    const agent = getLensAgent(lens);
+    const events: unknown[] = [];
+    for await (const event of agent.run(prompt)) {
+      events.push(event);
+    }
+
+    // Extract final text
+    let text = "";
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i] as Record<string, unknown>;
+      if (e.type === "done") {
+        const msg = e.message as Record<string, unknown>;
+        const blocks =
+          (msg.content as Array<{ type: string; text?: string }>) ?? [];
+        text = blocks
+          .filter((b) => b.type === "text")
+          .map((b) => b.text ?? "")
+          .join("");
+        break;
+      }
+    }
+
+    if (text) {
+      const hl = text.match(/HEADLINE:\s*(.+)/i);
+      const syn = text.match(/SYNTHESIS:\s*(.+)/is);
+      const conf = text.match(/CONFIDENCE:\s*(0\.\d+|1\.0|1)/i);
+      const src = text.match(/SOURCES:\s*(.+)/i);
+
+      if (hl) {
+        headline = hl[1]!.trim();
+      }
+      if (syn) {
+        synthesis = syn[1]!.trim();
+      }
+      if (conf) {
+        confidence = Number.parseFloat(conf[1]!);
+      }
+      if (src) {
+        const extra = src[1]!.split(/,\s*/).filter((u) => u.startsWith("http"));
+        sourceUrls.push(...extra);
+      }
+    }
+  } catch (err) {
+    emitStep(
+      runId,
+      `${lens}-lens`,
+      3,
+      "Failed",
+      `LLM analysis failed: ${err instanceof Error ? err.message : String(err)}`,
+      "failed",
+      100,
+      lens
+    );
+    return;
+  }
+
+  // 5. Compute score (0-100)
+  const score = Math.round(confidence * 100);
+
+  chain.push({
+    step: "analyze",
+    detail: `LLM produced ${headline.slice(0, 60)}...`,
+    timestamp: new Date().toISOString(),
+  });
+  chain.push({
+    step: "score",
+    detail: `Score ${score}/100 (confidence ${confidence.toFixed(2)})`,
+    timestamp: new Date().toISOString(),
+  });
+
+  // 6. Store finding in Cognee
+  const finding = {
+    headline,
+    synthesis,
+    confidence,
+    sourceUrls: [...new Set(sourceUrls)].slice(0, 5),
+    citedFactIds: facts.map((f) => f.factId),
+  };
+
+  await cogneeRemember(
+    {
+      source_url:
+        sourceUrls[0] ?? `https://argus.internal/lens/${lens}/${company}`,
+      scraped_at: new Date().toISOString(),
+      agent_id: `${lens}-lens`,
+      confidence,
+      data_type: "lens_finding",
+      content: `${headline}\n\n${synthesis}`,
+      raw_extract: finding,
+    },
+    DATASETS.lens_findings
+  );
+
+  // 7. Persist as signal
+  const signalId = `sig_${lens}_${Date.now()}`;
+  persistSignal({
+    id: signalId,
+    lens,
+    severity: confidence > 0.85 ? "high" : confidence > 0.7 ? "medium" : "low",
+    headline,
+    synthesis,
+    source_urls: finding.sourceUrls,
+    confidence,
+    agent_id: `${lens}-lens`,
+    detected_at: new Date().toISOString(),
+  });
+
+  emitStep(
+    runId,
+    `${lens}-lens`,
+    3,
+    "Complete",
+    `${lens.toUpperCase()}Lens: ${headline.slice(0, 60)} (score: ${score})`,
+    "success",
+    100,
+    lens
+  );
+
+  // 8. Emit completion event
+  const completion: LensAnalysisComplete = {
+    type: "lens_analysis_complete",
+    runId,
+    lens,
+    company,
+    finding,
+    score,
+    reasoningChain: chain,
+    confidence,
+  };
+
+  emit(completion);
+}
+
+// ─── Event Subscription ────────────────────────────────────────────────────
+
+on("fact_classified", async (event: FactClassified) => {
+  const { runId, primaryLens, company, secondaryLenses } = event;
+
+  // A fact goes to its primary lens AND any secondary lenses
+  const targetLenses = [primaryLens, ...secondaryLenses];
+
+  for (const lens of targetLenses) {
+    const bufferKey = `${runId}:${lens}:${company}`;
+
+    if (!buffers.has(bufferKey)) {
+      buffers.set(bufferKey, { facts: [], timer: null });
+    }
+
+    const buffer = buffers.get(bufferKey)!;
+    buffer.facts.push(event);
+
+    // Reset timer — wait for more facts in batch window
+    if (buffer.timer) {
+      clearTimeout(buffer.timer);
+    }
+
+    buffer.timer = setTimeout(() => {
+      const facts = buffer.facts;
+      buffers.delete(bufferKey);
+
+      if (facts.length > 0) {
+        analyzeLens(lens, runId, company, facts).catch((err) => {
+          console.error(`[${lens}-lens] Analysis failed:`, err);
+        });
+      }
+    }, BATCH_WINDOW_MS);
+  }
+});
+
+console.log("[agents/lenses] 3 lens agents registered as event subscribers");

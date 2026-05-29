@@ -1,6 +1,7 @@
 import { createCollectionAgent } from "./factory.ts";
 
 export const gtmAgent = createCollectionAgent({
+  agentId: "gtm-lens",
   name: "GTMLens",
   systemPrompt: [
     "You are the GTM Intelligence Lens. You analyze raw web data to produce revenue-team insights.",
@@ -26,6 +27,7 @@ export const gtmAgent = createCollectionAgent({
 });
 
 export const financeAgent = createCollectionAgent({
+  agentId: "finance-lens",
   name: "FinanceLens",
   systemPrompt: [
     "You are the Finance & Market Intelligence Lens. You produce alpha signals for institutional investors.",
@@ -53,6 +55,7 @@ export const financeAgent = createCollectionAgent({
 });
 
 export const securityAgent = createCollectionAgent({
+  agentId: "security-lens",
   name: "SecurityLens",
   systemPrompt: [
     "You are the Security & Compliance Lens. You detect risk signals in vendor ecosystems and regulatory environments.",
@@ -79,6 +82,7 @@ export const securityAgent = createCollectionAgent({
 });
 
 export const correlationEngine = createCollectionAgent({
+  agentId: "correlation-engine",
   name: "CorrelationEngine",
   systemPrompt: [
     "You are the Correlation Engine. You detect cross-domain connections that no single lens would find.",
@@ -104,6 +108,7 @@ export const correlationEngine = createCollectionAgent({
 });
 
 export const briefWriter = createCollectionAgent({
+  agentId: "brief-writer",
   name: "BriefWriter",
   systemPrompt: [
     "You are the Brief Writer. You synthesize correlated signals into polished intelligence briefs.",

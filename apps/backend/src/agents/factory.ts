@@ -1,8 +1,10 @@
 import { Agent, type AgentTool } from "@mohanscodex/spectra-agent";
+import { resolveAgentModel } from "../config/store.ts";
 import { createAllMcpAgentTools } from "../mcp/bridge.ts";
 import { cogneeTools } from "../tools/cognee.ts";
 
 export interface CollectionAgentConfig {
+  agentId: string;
   extraTools?: AgentTool[];
   mcpServers?: string[];
   name: string;
@@ -21,13 +23,10 @@ export function createCollectionAgent(config: CollectionAgentConfig): Agent {
     tools.push(...config.extraTools);
   }
 
+  const model = resolveAgentModel(config.agentId);
+
   return new Agent({
-    model: {
-      id: "moonshotai/kimi-k2.6",
-      provider: "aimlapi",
-      api: "chat-completions",
-    },
-    name: config.name,
+    model,
     systemPrompt: config.systemPrompt.join("\n"),
     tools,
   });
