@@ -28,7 +28,7 @@ on("monitor_tick", async (event: MonitorTick) => {
   }
 
   const { runId, company } = event;
-  const query = `${company} stock price today market data`;
+  const query = `${company} stock price cnbc marketwatch tradingview`;
   console.log(`[market-data-bot] Searching: "${query}"`);
   emitStep(
     runId,
@@ -159,7 +159,7 @@ on("monitor_tick", async (event: MonitorTick) => {
     20
   );
 
-  const search = await smartSearch(`${company} news today finance`, "news");
+  const search = await smartSearch(`${company} news today cnbc reuters bloomberg`, "news");
 
   emitStep(
     runId,
@@ -171,16 +171,13 @@ on("monitor_tick", async (event: MonitorTick) => {
     40
   );
 
-  const urlMatches = search.results.match(/https?:\/\/[^\s)\]>]+/g) ?? [];
+  const urlMatches = search.results.match(/https?:\/\/[^\s\)\]>"]+/g) ?? [];
   const urls = urlMatches
     .slice(0, 3)
-    .filter(
-      (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
-    );
+    .filter((u: string) => !(u.includes("google.com") || u.includes("bing.com")));
 
   let detail = "";
-  let scrapedUrl =
-    urls[0] ?? `https://news.search?q=${encodeURIComponent(company)}`;
+  let scrapedUrl = urls[0] ?? `https://news.search?q=${encodeURIComponent(company)}`;
 
   if (urls.length > 0) {
     const isFinanceSite = urls[0]!.includes("yahoo") || urls[0]!.includes("cnbc") || urls[0]!.includes("bloomberg");

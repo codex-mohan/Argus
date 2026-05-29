@@ -278,7 +278,7 @@ export function persistBrief(
       JSON.stringify(brief.key_signals.map((s) => s.headline)),
       brief.risk_score,
       brief.recommendation,
-      JSON.stringify(brief.sources.slice(0, 10)),
+      JSON.stringify((brief.sources ?? []).slice(0, 10)),
       brief.generated_at,
     ]
   );
