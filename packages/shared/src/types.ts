@@ -60,7 +60,13 @@ export const ProviderStatus = z.object({
 });
 export type ProviderStatus = z.infer<typeof ProviderStatus>;
 
-export const AgentStepStatus = z.enum(["pending", "running", "success", "failed", "skipped"]);
+export const AgentStepStatus = z.enum([
+  "pending",
+  "running",
+  "success",
+  "failed",
+  "skipped",
+]);
 export type AgentStepStatus = z.infer<typeof AgentStepStatus>;
 
 export const SignalLens = z.enum(["gtm", "finance", "security"]);
