@@ -186,8 +186,8 @@ DATA TYPE: ${dataType}
 SCRAPED CONTENT:
 ${rawText.slice(0, 8000)}
 
-Format each fact as JSON objects in a JSON array:
-[{"claim": "...", "confidence": 0.X, "lens": "gtm|finance|security"}]`;
+Format each fact as JSON objects in a JSON array. Assign at least one lens and optionally a secondary:
+[{"claim": "...", "confidence": 0.X, "lens": "finance", "secondary": "gtm"}]`;
 
       const completion = await client.chat.completions.create({
         model: "deepseek-v4-flash",
@@ -200,7 +200,7 @@ Format each fact as JSON objects in a JSON array:
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         try {
-          const parsed = JSON.parse(jsonMatch[0]) as Array<{ claim: string; confidence: number; lens: string }>;
+          const parsed = JSON.parse(jsonMatch[0]) as Array<{ claim: string; confidence: number; lens: string; secondary?: string }>;
           for (const item of parsed) {
             if (item.claim && item.confidence && item.lens) {
               facts.push({
@@ -214,6 +214,8 @@ Format each fact as JSON objects in a JSON array:
                 confidence: Math.min(1, Math.max(0, item.confidence)),
                 evidence: receipt,
                 rawData: rawText.slice(0, 3000),
+                suggestedLens: item.lens as "gtm" | "finance" | "security",
+                suggestedSecondary: item.secondary as "gtm" | "finance" | "security" | undefined,
               });
             }
           }
@@ -273,7 +275,13 @@ Format each fact as JSON objects in a JSON array:
 
   // Classify each fact
   for (const fact of facts) {
-    const classification = classifyFact(fact.claim, dataType);
+    const classification = fact.suggestedLens
+      ? {
+          primary: fact.suggestedLens,
+          secondary: (fact.suggestedSecondary ? [fact.suggestedSecondary] : []) as Array<"gtm" | "finance" | "security">,
+          reasoning: "LLM-classified",
+        }
+      : classifyFact(fact.claim, dataType);
 
     const classified: FactClassified = {
       type: "fact_classified",

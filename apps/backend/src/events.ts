@@ -48,6 +48,8 @@ export interface FactExtracted {
   runId: string;
   scrapedAt: string;
   sourceUrl: string;
+  suggestedLens?: "gtm" | "finance" | "security";
+  suggestedSecondary?: "gtm" | "finance" | "security";
   type: "fact_extracted";
 }
 
@@ -470,6 +472,7 @@ export const REPLAY_SCENARIOS: Record<
         confidence: 0.8,
         reasoning:
           "Supply chain disruption is security-primary; has direct financial impact (finance) and competitive positioning effect (GTM).",
+        rawData: "TSMC delays 3nm production by 6 weeks, impacting NVIDIA Blackwell chip shipments per Digitimes report.",
       },
       {
         type: "lens_analysis_complete",
