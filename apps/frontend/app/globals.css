@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* ─── Canvas ─── */
+  --color-void: #070708;
+  --color-base: #0c0c0e;
+  --color-surface: #131316;
+  --color-surface-raised: #1a1a1f;
+  --color-surface-glass: rgba(26, 26, 31, 0.72);
+
+  /* ─── Borders ─── */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-medium: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* ─── Text ─── */
+  --color-text-primary: #f0f0f3;
+  --color-text-secondary: #b8b8c4;
+  --color-text-tertiary: #7a7a8a;
+  --color-text-muted: #555564;
+
+  /* ─── Lens Colors ─── */
+  --color-gtm: #d4a853;
+  --color-gtm-glow: rgba(212, 168, 83, 0.15);
+  --color-gtm-bg: rgba(212, 168, 83, 0.08);
+
+  --color-finance: #34d399;
+  --color-finance-glow: rgba(52, 211, 153, 0.15);
+  --color-finance-bg: rgba(52, 211, 153, 0.08);
+
+  --color-security: #f87171;
+  --color-security-glow: rgba(248, 113, 113, 0.15);
+  --color-security-bg: rgba(248, 113, 113, 0.08);
+
+  /* ─── Accent ─── */
+  --color-truth: #a78bfa;
+  --color-truth-glow: rgba(167, 139, 250, 0.2);
+
+  /* ─── Fonts ─── */
+  --font-display: "Clash Display", sans-serif;
+  --font-body: "Satoshi", system-ui, sans-serif;
+  --font-mono: "Commit Mono", "SF Mono", monospace;
+
+  /* ─── Tailwind map to our colors ─── */
+  --color-background: var(--color-base);
+  --color-foreground: var(--color-text-primary);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text-primary);
+  background-color: var(--color-base);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Film grain */
+.grain {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.025;
+}
+
+/* Animations */
+@keyframes rotate-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes spark-dance {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scaleY(1.2);
+  }
+}
+
+@keyframes agent-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
