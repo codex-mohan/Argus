@@ -591,7 +591,7 @@ const SEED_MODELS: Array<Omit<ModelEntry, "indexedAt">> = [
     provider: "deepseek",
     contextLength: 1_000_000,
     costPer1mInput: 0.15,
-    costPer1mOutput: 0.60,
+    costPer1mOutput: 0.6,
     capabilities: ["chat", "reasoning"],
   },
   {
@@ -599,8 +599,8 @@ const SEED_MODELS: Array<Omit<ModelEntry, "indexedAt">> = [
     name: "kimi-k2-6",
     provider: "moonshot",
     contextLength: 256_000,
-    costPer1mInput: 2.00,
-    costPer1mOutput: 8.00,
+    costPer1mInput: 2.0,
+    costPer1mOutput: 8.0,
     capabilities: ["chat", "reasoning"],
   },
   {
@@ -609,7 +609,7 @@ const SEED_MODELS: Array<Omit<ModelEntry, "indexedAt">> = [
     provider: "deepseek",
     contextLength: 64_000,
     costPer1mInput: 0.27,
-    costPer1mOutput: 1.10,
+    costPer1mOutput: 1.1,
     capabilities: ["chat", "reasoning"],
   },
 ];
@@ -620,10 +620,21 @@ function seedModelCatalog(): void {
     db.run(
       `INSERT OR IGNORE INTO model_catalog (model_id, name, provider, context_length, cost_per_1m_input, cost_per_1m_output, capabilities, indexed_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [m.modelId, m.name, m.provider, m.contextLength, m.costPer1mInput, m.costPer1mOutput, JSON.stringify(m.capabilities), now]
+      [
+        m.modelId,
+        m.name,
+        m.provider,
+        m.contextLength,
+        m.costPer1mInput,
+        m.costPer1mOutput,
+        JSON.stringify(m.capabilities),
+        now,
+      ]
     );
   }
-  console.log(`[config] Seeded ${SEED_MODELS.length} known models into catalog`);
+  console.log(
+    `[config] Seeded ${SEED_MODELS.length} known models into catalog`
+  );
 }
 
 // ─── Init ───────────────────────────────────────────────────────────────────

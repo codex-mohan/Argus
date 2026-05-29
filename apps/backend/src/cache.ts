@@ -317,7 +317,13 @@ export async function smartScrape(
   if (options.preferredMethod === "structured") {
     const structured = await tryStructuredExtractor(url, dataType);
     if (structured) {
-      await storeCache(url, dataType, structured.content, structured.receipt, query);
+      await storeCache(
+        url,
+        dataType,
+        structured.content,
+        structured.receipt,
+        query
+      );
       return { ...structured, fromCache: false };
     }
   }
@@ -327,7 +333,11 @@ export async function smartScrape(
     const browser = await tryScrapingBrowser(url);
     if (browser.status === "success") {
       await storeCache(url, dataType, browser.content, browser.receipt, query);
-      return { content: browser.content, receipt: browser.receipt, fromCache: false };
+      return {
+        content: browser.content,
+        receipt: browser.receipt,
+        fromCache: false,
+      };
     }
     // Fall through to other methods
   }
@@ -470,7 +480,12 @@ async function tryScrapeAsMarkdown(url: string): Promise<MethodResult> {
     const result = await callMcpTool("brightdata", tool.name, { url });
     const text = extractText(result);
     if (isBlockedPage(text, url)) {
-      return { status: "failed", content: "", receipt: {} as EvidenceReceipt, error: "Blocked page detected" };
+      return {
+        status: "failed",
+        content: "",
+        receipt: {} as EvidenceReceipt,
+        error: "Blocked page detected",
+      };
     }
     logCredit("brightdata", "scrape_as_markdown", 2);
     return {
@@ -660,9 +675,26 @@ export async function smartSearch(
 
 function isBlockedPage(text: string, url: string): boolean {
   const lower = text.toLowerCase();
-  const blocked = ["please enable javascript", "enable javascript", "javascript is disabled", "please log in", "sign in to continue", "you need to enable"];
-  if (blocked.some((p) => lower.includes(p))) return true;
-  if (text.length < 500 && (url.includes("yahoo") || url.includes("cnbc") || url.includes("bloomberg") || url.includes("wsj"))) return true;
+  const blocked = [
+    "please enable javascript",
+    "enable javascript",
+    "javascript is disabled",
+    "please log in",
+    "sign in to continue",
+    "you need to enable",
+  ];
+  if (blocked.some((p) => lower.includes(p))) {
+    return true;
+  }
+  if (
+    text.length < 500 &&
+    (url.includes("yahoo") ||
+      url.includes("cnbc") ||
+      url.includes("bloomberg") ||
+      url.includes("wsj"))
+  ) {
+    return true;
+  }
   return false;
 }
 

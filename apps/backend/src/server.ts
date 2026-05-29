@@ -249,7 +249,15 @@ async function handleReplay(req: Request): Promise<Response> {
 
 // ─── MCP State (updated async) ───────────────────────────────────────────
 
-let mcpState: Record<string, { connected: boolean; tools: number; toolNames: string[]; error: string | null }> = {
+let mcpState: Record<
+  string,
+  {
+    connected: boolean;
+    tools: number;
+    toolNames: string[];
+    error: string | null;
+  }
+> = {
   brightdata: { connected: false, tools: 0, toolNames: [], error: null },
   cognee: { connected: false, tools: 0, toolNames: [], error: null },
 };
@@ -259,13 +267,19 @@ async function connectMcpServersAsync(): Promise<void> {
   const cogneeUrl = process.env.COGNEE_MCP_URL ?? "http://localhost:8000";
 
   const mcpServers: McpServerConfig[] = [];
-  const errors: Record<string, string | null> = { brightdata: null, cognee: null };
+  const errors: Record<string, string | null> = {
+    brightdata: null,
+    cognee: null,
+  };
   const toolNames: Record<string, string[]> = { brightdata: [], cognee: [] };
   let brightDataTools = 0;
   let cogneeTools = 0;
 
   if (brightDataKey) {
-    mcpServers.push({ name: "brightdata", url: `https://mcp.brightdata.com/mcp?token=${brightDataKey}` });
+    mcpServers.push({
+      name: "brightdata",
+      url: `https://mcp.brightdata.com/mcp?token=${brightDataKey}`,
+    });
     console.log("  Bright Data MCP: configured");
   } else {
     errors.brightdata = "BRIGHTDATA_API_KEY not set in .env";
@@ -279,9 +293,17 @@ async function connectMcpServersAsync(): Promise<void> {
     try {
       const tools = await connectMcpServer(cfg);
       const names = tools.map((t) => t.name);
-      if (cfg.name === "brightdata") { brightDataTools = tools.length; toolNames.brightdata = names; }
-      if (cfg.name === "cognee") { cogneeTools = tools.length; toolNames.cognee = names; }
-      console.log(`  ${cfg.name}: ✓ ${tools.length} tools (${names.slice(0, 5).join(", ")}${names.length > 5 ? ` +${names.length - 5} more` : ""})`);
+      if (cfg.name === "brightdata") {
+        brightDataTools = tools.length;
+        toolNames.brightdata = names;
+      }
+      if (cfg.name === "cognee") {
+        cogneeTools = tools.length;
+        toolNames.cognee = names;
+      }
+      console.log(
+        `  ${cfg.name}: ✓ ${tools.length} tools (${names.slice(0, 5).join(", ")}${names.length > 5 ? ` +${names.length - 5} more` : ""})`
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors[cfg.name] = msg;
@@ -290,8 +312,18 @@ async function connectMcpServersAsync(): Promise<void> {
   }
 
   mcpState = {
-    brightdata: { connected: brightDataTools > 0, tools: brightDataTools, toolNames: toolNames.brightdata, error: errors.brightdata },
-    cognee: { connected: cogneeTools > 0, tools: cogneeTools, toolNames: toolNames.cognee, error: errors.cognee },
+    brightdata: {
+      connected: brightDataTools > 0,
+      tools: brightDataTools,
+      toolNames: toolNames.brightdata,
+      error: errors.brightdata,
+    },
+    cognee: {
+      connected: cogneeTools > 0,
+      tools: cogneeTools,
+      toolNames: toolNames.cognee,
+      error: errors.cognee,
+    },
   };
 
   // Start pipeline only if Bright Data is connected
@@ -426,7 +458,9 @@ async function handleChat(req: Request): Promise<Response> {
     // Include full brief details for context
     const briefDetails = companyBriefs
       .map((b) => {
-        const findings = (b.keyFindings && Array.isArray(b.keyFindings) ? b.keyFindings : []).join("; ");
+        const findings = (
+          b.keyFindings && Array.isArray(b.keyFindings) ? b.keyFindings : []
+        ).join("; ");
         const rec = b.recommendation ?? "No recommendation";
         return `### ${b.company}\n**${b.headline}**\nRisk: ${b.riskScore}/100\nSummary: ${b.summary?.slice(0, 300) ?? "No summary"}\nKey Findings: ${findings}\nRecommendation: ${rec}`;
       })

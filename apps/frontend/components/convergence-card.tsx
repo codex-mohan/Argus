@@ -82,7 +82,9 @@ export default function ConvergenceCard({ signals }: ConvergenceCardProps) {
         </div>
         <div className="text-right font-mono text-[10px] text-text-muted">
           <div className="font-bold font-display text-lg text-truth">
-            {convergence ? `${Math.round(convergence.confidence * 100)}%` : "--"}
+            {convergence
+              ? `${Math.round(convergence.confidence * 100)}%`
+              : "--"}
           </div>
           <div>confidence</div>
         </div>
@@ -108,9 +110,9 @@ export default function ConvergenceCard({ signals }: ConvergenceCardProps) {
         )}
         {convergence && (
           <button
-            type="button"
+            className="ml-auto rounded border border-zinc-700 px-3 py-1 font-semibold text-[10px] text-zinc-300 uppercase tracking-wider hover:border-zinc-500 hover:text-zinc-100"
             onClick={() => router.push("/reports")}
-            className="ml-auto rounded border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+            type="button"
           >
             View Full Reports
           </button>

@@ -261,7 +261,9 @@ export function persistBrief(
     .query(
       "SELECT id FROM briefs WHERE company = ? AND headline = ? AND generated_at > datetime('now', '-1 hour')"
     )
-    .get(company, brief.executive_summary.slice(0, 100)) as { id: number } | null;
+    .get(company, brief.executive_summary.slice(0, 100)) as {
+    id: number;
+  } | null;
 
   if (existing) {
     return;

@@ -8,7 +8,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { clearModelCatalog, type ModelEntry, storeModels } from "./store.ts";
+import { type ModelEntry, storeModels } from "./store.ts";
 
 const BASE_URL = "https://api.aimlapi.com/v1";
 
@@ -112,7 +112,11 @@ export async function indexModels(apiKey?: string): Promise<{
     }
 
     if (models.length === 0) {
-      return { success: false, count: 0, error: `API returned 0 models. Response keys: ${Object.keys(raw).join(", ")}` };
+      return {
+        success: false,
+        count: 0,
+        error: `API returned 0 models. Response keys: ${Object.keys(raw).join(", ")}`,
+      };
     }
 
     console.log(`[indexer] Fetched ${models.length} models from AI/ML API`);
@@ -122,8 +126,15 @@ export async function indexModels(apiKey?: string): Promise<{
     for (const m of models) {
       providers.add(m.owned_by ?? m.id.split("/")[0] ?? "unknown");
     }
-    console.log(`[indexer] Available providers: ${[...providers].sort().join(", ")}`);
-    console.log(`[indexer] Sample model IDs: ${models.slice(0, 5).map((m) => m.id).join(", ")}`);
+    console.log(
+      `[indexer] Available providers: ${[...providers].sort().join(", ")}`
+    );
+    console.log(
+      `[indexer] Sample model IDs: ${models
+        .slice(0, 5)
+        .map((m) => m.id)
+        .join(", ")}`
+    );
 
     const entries: ModelEntry[] = models.map((m) => ({
       modelId: normalizeModelId(m.id),

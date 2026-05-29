@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TagInput } from "@/components/tag-input.tsx";
+import { useAuth } from "@/contexts/auth-context.tsx";
 import {
   fetchAgentConfigs,
   fetchModels,
@@ -9,8 +11,6 @@ import {
   updateAgentConfig,
   updatePipelineConfig,
 } from "@/lib/api.ts";
-import { useAuth } from "@/contexts/auth-context.tsx";
-import { TagInput } from "@/components/tag-input.tsx";
 
 const SAVED = { ok: true, msg: "" } as const;
 
@@ -26,14 +26,21 @@ export default function SettingsPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [indexing, setIndexing] = useState(false);
-  const [indexResult, setIndexResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [indexResult, setIndexResult] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
   const [modelSearch, setModelSearch] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [wlSaving, setWlSaving] = useState(false);
-  const [wlResult, setWlResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [wlResult, setWlResult] = useState<{ ok: boolean; msg: string } | null>(
+    null
+  );
 
   const { user, updateUser } = useAuth();
-  const [watchlistTags, setWatchlistTags] = useState<string[]>(user?.watchlist ?? []);
+  const [watchlistTags, setWatchlistTags] = useState<string[]>(
+    user?.watchlist ?? []
+  );
 
   async function saveWatchlist(tags: string[]) {
     setWatchlistTags(tags);
@@ -43,13 +50,18 @@ export default function SettingsPage() {
       const token = localStorage.getItem("argus_token");
       const res = await fetch("/api/watchlist", {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
         body: JSON.stringify({ companies: tags }),
       });
       const data = await res.json();
       if (data.success) {
         setWlResult({ ok: true, msg: "Watchlist updated" });
-        if (user) updateUser({ ...user, watchlist: tags });
+        if (user) {
+          updateUser({ ...user, watchlist: tags });
+        }
       } else {
         setWlResult({ ok: false, msg: data.error ?? "Failed" });
       }
@@ -67,7 +79,9 @@ export default function SettingsPage() {
           m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
           m.provider.toLowerCase().includes(modelSearch.toLowerCase()) ||
           m.modelId.toLowerCase().includes(modelSearch.toLowerCase()) ||
-          m.capabilities.some((c) => c.toLowerCase().includes(modelSearch.toLowerCase()))
+          m.capabilities.some((c) =>
+            c.toLowerCase().includes(modelSearch.toLowerCase())
+          )
       )
     : models;
 
@@ -83,7 +97,10 @@ export default function SettingsPage() {
         fetchAgentConfigs().catch(() => []),
         fetchPipelineConfig().catch(() => []),
       ]);
-      m.sort((x, y) => x.provider.localeCompare(y.provider) || x.name.localeCompare(y.name));
+      m.sort(
+        (x, y) =>
+          x.provider.localeCompare(y.provider) || x.name.localeCompare(y.name)
+      );
       setModels(m);
       a.sort((x, y) => x.agentId.localeCompare(y.agentId));
       setAgents(a);
@@ -99,13 +116,19 @@ export default function SettingsPage() {
     try {
       const result = await indexModels();
       if (result.success) {
-        setIndexResult({ ok: true, msg: `Indexed ${result.count} models from AI/ML API` });
+        setIndexResult({
+          ok: true,
+          msg: `Indexed ${result.count} models from AI/ML API`,
+        });
       } else {
         setIndexResult({ ok: false, msg: result.error ?? "Indexing failed" });
       }
       await loadAll();
     } catch (err) {
-      setIndexResult({ ok: false, msg: err instanceof Error ? err.message : "Indexing failed" });
+      setIndexResult({
+        ok: false,
+        msg: err instanceof Error ? err.message : "Indexing failed",
+      });
     } finally {
       setIndexing(false);
     }
@@ -157,7 +180,8 @@ export default function SettingsPage() {
       <section className="mb-8 border border-zinc-800 bg-zinc-950 p-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold text-sm text-zinc-400 uppercase tracking-wider">
-            Model Catalog ({filteredModels.length}{modelSearch ? ` of ${models.length}` : ""} models)
+            Model Catalog ({filteredModels.length}
+            {modelSearch ? ` of ${models.length}` : ""} models)
           </h2>
           <button
             className="rounded-md bg-amber-600 px-3 py-1.5 font-semibold text-white text-xs hover:bg-amber-500 disabled:opacity-50"
@@ -183,11 +207,11 @@ export default function SettingsPage() {
 
         <div className="mb-3">
           <input
-            type="text"
-            placeholder="Search models by name, provider, or capability..."
-            value={modelSearch}
-            onChange={(e) => setModelSearch(e.target.value)}
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600"
+            onChange={(e) => setModelSearch(e.target.value)}
+            placeholder="Search models by name, provider, or capability..."
+            type="text"
+            value={modelSearch}
           />
         </div>
 
@@ -312,9 +336,16 @@ export default function SettingsPage() {
         <h2 className="mb-4 font-semibold text-sm text-zinc-400 uppercase tracking-wider">
           Watchlist
         </h2>
-        <TagInput tags={watchlistTags} onChange={saveWatchlist} saving={wlSaving} placeholder="Add company and press Enter..." />
+        <TagInput
+          onChange={saveWatchlist}
+          placeholder="Add company and press Enter..."
+          saving={wlSaving}
+          tags={watchlistTags}
+        />
         {wlResult && (
-          <div className={`mt-2 text-[10px] ${wlResult.ok ? "text-emerald-400" : "text-red-400"}`}>
+          <div
+            className={`mt-2 text-[10px] ${wlResult.ok ? "text-emerald-400" : "text-red-400"}`}
+          >
             {wlResult.msg}
           </div>
         )}

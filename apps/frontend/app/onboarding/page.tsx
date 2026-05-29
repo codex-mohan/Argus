@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/contexts/auth-context.tsx";
 import { TagInput } from "@/components/tag-input.tsx";
+import { useAuth } from "@/contexts/auth-context.tsx";
 
 const STEPS = [
   {
@@ -18,7 +18,9 @@ const STEPS = [
 export default function OnboardingPage() {
   const { user, updateUser } = useAuth();
   const [step, setStep] = useState(user?.onboardingStep ?? 0);
-  const [watchlistItems, setWatchlistItems] = useState<string[]>(user?.watchlist ?? []);
+  const [watchlistItems, setWatchlistItems] = useState<string[]>(
+    user?.watchlist ?? []
+  );
   const [saving, setSaving] = useState(false);
 
   // If onboarding is already complete, redirect
@@ -125,10 +127,7 @@ export default function OnboardingPage() {
           {step === 0 && <WelcomeStep />}
           {step === 1 && <ConnectStep />}
           {step === 2 && (
-            <WatchlistStep
-              tags={watchlistItems}
-              onChange={setWatchlistItems}
-            />
+            <WatchlistStep onChange={setWatchlistItems} tags={watchlistItems} />
           )}
           {step === 3 && <CompleteStep />}
 
@@ -268,15 +267,20 @@ function WatchlistStep({
         Configure Watchlist
       </h2>
       <p className="mb-4 text-sm text-zinc-400">
-        Add the companies you want to monitor. Press Enter after each one or paste comma-separated values.
+        Add the companies you want to monitor. Press Enter after each one or
+        paste comma-separated values.
       </p>
-      <TagInput tags={tags} onChange={onChange} placeholder="Type company name and press Enter..." />
+      <TagInput
+        onChange={onChange}
+        placeholder="Type company name and press Enter..."
+        tags={tags}
+      />
       <p className="mt-2 text-[10px] text-zinc-600">
-        Tip: Add 3-5 companies to start. You can always expand your watchlist from the dashboard.
+        Tip: Add 3-5 companies to start. You can always expand your watchlist
+        from the dashboard.
       </p>
     </div>
   );
-
 }
 
 function CompleteStep() {

@@ -5,7 +5,27 @@
  *
  * Subscribes to ConvergenceDetected events with verdict="converged".
  * Composes polished intelligence briefs from correlated signals.
+ * System prompt loaded from prompts/briefwriter.md at startup.
  */
+
+const PROMPT_DIR = `${import.meta.dir}/prompts`;
+let briefWriterSystemPrompt = "";
+try {
+  briefWriterSystemPrompt = await Bun.file(
+    `${PROMPT_DIR}/briefwriter.md`
+  ).text();
+  console.log(
+    `[brief-writer] Loaded briefwriter prompt (${briefWriterSystemPrompt.length} chars)`
+  );
+} catch {
+  console.warn(
+    "[brief-writer] Could not load briefwriter.md, using inline fallback"
+  );
+  briefWriterSystemPrompt = `You are the Argus Brief Writer. Synthesize correlated intelligence signals into executive briefs.
+The HEADLINE must contain: company name + a specific number/date/percentage + an action verb.
+Do NOT use vague phrases like "Multiple intelligence lenses have converged".
+Format: HEADLINE / SUMMARY / KEY_FINDINGS (bullets) / RISK_SCORE / RECOMMENDATION / SOURCES`;
+}
 
 import { Agent } from "@mohanscodex/spectra-agent";
 import { resolveAgentModel } from "../config/store.ts";
@@ -23,14 +43,7 @@ function getBriefAgent(): Agent {
   const model = resolveAgentModel("brief-writer");
   return new Agent({
     model,
-    systemPrompt: `You are the Argus Brief Writer. Synthesize correlated intelligence signals into executive briefs.
-Rules:
-- Headline: Compelling one-liner
-- Summary: 2-3 paragraphs max
-- Key findings: 3-5 bullets with lens attribution
-- Risk score: 0-100
-- Recommendation: Concrete action
-- Every claim must cite a source URL`,
+    systemPrompt: briefWriterSystemPrompt,
     tools: [],
   });
 }
@@ -166,16 +179,48 @@ BE SPECIFIC. If a signal mentions a price of $942, say $942. If hiring increased
     ].slice(0, 10),
   };
 
+  // Compute dominant lens from the highest-confidence signal
+  const dominantLens = signals.reduce(
+    (best, s) => (s.confidence > best.confidence ? s : best),
+    signals[0]!
+  );
+  // Map from LensFinding back to a lens tag — use the agent_id embedded in citedFactIds or fall back to finance
+  // The correlated signals come from LensAnalysisComplete events which carry the lens name in their headline/synthesis
+  const lensTagFromSignal = (
+    sig: LensFinding
+  ): "gtm" | "finance" | "security" => {
+    const text = (sig.headline + " " + sig.synthesis).toLowerCase();
+    if (
+      text.includes("[gtm]") ||
+      text.includes("gtm lens") ||
+      text.includes("hiring") ||
+      text.includes("competitor")
+    ) {
+      return "gtm";
+    }
+    if (
+      text.includes("[security]") ||
+      text.includes("security lens") ||
+      text.includes("regulatory") ||
+      text.includes("vendor risk")
+    ) {
+      return "security";
+    }
+    return "finance";
+  };
+  const primaryLens = lensTagFromSignal(dominantLens);
+
   // Persist
   persistBrief(runId, company, {
     company,
     generated_at: new Date().toISOString(),
-    lens: "finance",
+    lens: primaryLens,
     executive_summary: summary,
     key_signals: signals.map((s: LensFinding) => ({
-      id: `brief_sig_${Date.now()}`,
-      lens: "finance",
-      severity: "medium",
+      id: `brief_sig_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      lens: lensTagFromSignal(s),
+      severity:
+        s.confidence >= 0.8 ? "high" : s.confidence >= 0.6 ? "medium" : "low",
       headline: s.headline,
       synthesis: s.synthesis,
       source_urls: s.sourceUrls,

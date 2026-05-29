@@ -5,6 +5,7 @@
  *
  * Each lens independently subscribes to FactClassified events.
  * Batches facts per company, queries Cognee, analyzes with LLM.
+ * System prompts are loaded from /prompts/*.md at startup.
  */
 
 import { DATASETS } from "@argus/shared";
@@ -32,34 +33,59 @@ const BATCH_WINDOW_MS = 5000; // Wait 5s for all facts to arrive before analyzin
 
 // ─── Lens LLM Agents (lazy, config-driven) ───────────────────────────────────
 
+// Load prompts from .md files at startup (Bun.file is sync-capable via .text())
+const PROMPT_DIR = `${import.meta.dir}/../prompts`;
+
+async function loadPrompt(filename: string, fallback: string): Promise<string> {
+  try {
+    return await Bun.file(`${PROMPT_DIR}/${filename}`).text();
+  } catch {
+    console.warn(
+      `[lenses] Could not load prompt file ${filename}, using fallback`
+    );
+    return fallback;
+  }
+}
+
+// Eagerly load all lens prompts once at module init
+const lensPrompts: Record<string, string> = {
+  gtm: "",
+  finance: "",
+  security: "",
+};
+
+await Promise.all([
+  loadPrompt(
+    "lens-gtm.md",
+    "You are the GTM Intelligence Lens. Analyze facts and produce a specific, data-anchored finding with HEADLINE, SYNTHESIS, CONFIDENCE, and SOURCES."
+  ).then((p) => {
+    lensPrompts.gtm = p;
+  }),
+  loadPrompt(
+    "lens-finance.md",
+    "You are the Finance Intelligence Lens. Analyze facts and produce a specific, quantified finding with HEADLINE, SYNTHESIS, CONFIDENCE, and SOURCES."
+  ).then((p) => {
+    lensPrompts.finance = p;
+  }),
+  loadPrompt(
+    "lens-security.md",
+    "You are the Security Intelligence Lens. Analyze facts and produce a specific, risk-anchored finding with HEADLINE, SYNTHESIS, CONFIDENCE, and SOURCES."
+  ).then((p) => {
+    lensPrompts.security = p;
+  }),
+]);
+
+console.log(
+  `[lenses] Loaded ${Object.keys(lensPrompts).length} lens prompts from .md files`
+);
+
 function getLensAgent(lens: "gtm" | "finance" | "security"): Agent {
   const model = resolveAgentModel(`${lens}-lens`);
-  const prompts: Record<string, string> = {
-    gtm: `You are the GTM Intelligence Lens. Analyze facts and produce a concise finding.
-Rules:
-- Headline: 1 line
-- Synthesis: 2-3 sentences
-- Confidence: 0.0-1.0
-- Cite source URLs
-- Focus on: competitor moves, hiring signals, buying intent, account enrichment`,
-    finance: `You are the Finance & Market Intelligence Lens. Analyze facts and produce alpha signals.
-Rules:
-- Headline: 1 line
-- Synthesis: 2-3 sentences
-- Confidence: 0.0-1.0
-- Cite source URLs
-- Focus on: price moves, guidance changes, filing anomalies, earnings divergence`,
-    security: `You are the Security & Compliance Lens. Detect vendor risk and regulatory exposure.
-Rules:
-- Headline: 1 line
-- Synthesis: 2-3 sentences
-- Confidence: 0.0-1.0
-- Cite source URLs
-- Focus on: vendor distress, regulatory actions, brand exposure, compliance gaps`,
-  };
   return new Agent({
     model,
-    systemPrompt: prompts[lens]!,
+    systemPrompt:
+      lensPrompts[lens] ??
+      `You are the ${lens.toUpperCase()} Intelligence Lens. Analyze facts and produce a specific finding with HEADLINE, SYNTHESIS, CONFIDENCE, and SOURCES.`,
     tools: [],
   });
 }
@@ -109,7 +135,9 @@ async function analyzeLens(
   company: string,
   facts: FactClassified[]
 ): Promise<void> {
-  console.log(`[lenses] analyzeLens: ${lens} for ${company} (${facts.length} facts)`);
+  console.log(
+    `[lenses] analyzeLens: ${lens} for ${company} (${facts.length} facts)`
+  );
   emitStep(
     runId,
     `${lens}-lens`,
@@ -186,19 +214,24 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
   let headline = `${company} — ${lens.toUpperCase()} analysis`;
   let synthesis = `Analyzed ${facts.length} facts for ${company}.`;
   // Base confidence from fact quality, not hardcoded 0.7
-  let confidence = facts.length > 0
-    ? facts.reduce((sum, f) => sum + f.confidence, 0) / facts.length
-    : 0.5;
+  let confidence =
+    facts.length > 0
+      ? facts.reduce((sum, f) => sum + f.confidence, 0) / facts.length
+      : 0.5;
   const sourceUrls = [...new Set(facts.map((f) => f.sourceUrl))];
 
   try {
     const agent = getLensAgent(lens);
-    console.log(`[lenses] ${lens}/${company}: calling LLM (${prompt.length} chars prompt)...`);
+    console.log(
+      `[lenses] ${lens}/${company}: calling LLM (${prompt.length} chars prompt)...`
+    );
     const events: unknown[] = [];
     for await (const event of agent.run(prompt)) {
       events.push(event);
     }
-    console.log(`[lenses] ${lens}/${company}: LLM returned ${events.length} events`);
+    console.log(
+      `[lenses] ${lens}/${company}: LLM returned ${events.length} events`
+    );
 
     // Extract final text
     let text = "";
@@ -237,7 +270,9 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
       }
     }
   } catch (err) {
-    console.error(`[lenses] ${lens}/${company}: LLM failed — ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `[lenses] ${lens}/${company}: LLM failed — ${err instanceof Error ? err.message : String(err)}`
+    );
     emitStep(
       runId,
       `${lens}-lens`,
@@ -264,7 +299,9 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
     detail: `Score ${score}/100 (confidence ${confidence.toFixed(2)})`,
     timestamp: new Date().toISOString(),
   });
-  console.log(`[lenses] ${lens}/${company}: complete — score ${score}/100, confidence ${confidence.toFixed(2)}, headline: ${headline.slice(0, 80)}`);
+  console.log(
+    `[lenses] ${lens}/${company}: complete — score ${score}/100, confidence ${confidence.toFixed(2)}, headline: ${headline.slice(0, 80)}`
+  );
 
   // 6. Store finding in Cognee
   const finding = {

@@ -20,8 +20,15 @@ export function Sidebar() {
   const { connected } = useSignalStream();
 
   // Backend health check
-  const [health, setHealth] = useState<Record<string, { connected: boolean; tools?: number; error?: string; pipeline?: boolean }>>({});
-  const [mcpDetail, setMcpDetail] = useState<Record<string, { tools: number; error?: string }>>({});
+  const [health, setHealth] = useState<
+    Record<
+      string,
+      { connected: boolean; tools?: number; error?: string; pipeline?: boolean }
+    >
+  >({});
+  const [mcpDetail, setMcpDetail] = useState<
+    Record<string, { tools: number; error?: string }>
+  >({});
 
   useEffect(() => {
     const poll = () => {
@@ -29,8 +36,16 @@ export function Sidebar() {
         .then((r) => r.json().catch(() => ({})))
         .then((d) => {
           setHealth({
-            brightdata: { connected: d.mcp?.brightdata?.connected ?? false, tools: d.mcp?.brightdata?.tools ?? 0, error: d.mcp?.brightdata?.error },
-            cognee: { connected: d.mcp?.cognee?.connected ?? false, tools: d.mcp?.cognee?.tools ?? 0, error: d.mcp?.cognee?.error },
+            brightdata: {
+              connected: d.mcp?.brightdata?.connected ?? false,
+              tools: d.mcp?.brightdata?.tools ?? 0,
+              error: d.mcp?.brightdata?.error,
+            },
+            cognee: {
+              connected: d.mcp?.cognee?.connected ?? false,
+              tools: d.mcp?.cognee?.tools ?? 0,
+              error: d.mcp?.cognee?.error,
+            },
             pipeline: { connected: d.pipeline ?? false },
             sse: { connected },
           });
@@ -82,10 +97,32 @@ export function Sidebar() {
           Status
         </div>
         <div className="mt-2 space-y-1.5 px-2">
-          <StatusBadge label="Bright Data" status={health.brightdata?.connected ? "connected" : "error"} detail={health.brightdata?.connected ? `${health.brightdata.tools} tools` : (health.brightdata?.error ?? "Not connected")} />
-          <StatusBadge label="Cognee" status={health.cognee?.connected ? "connected" : "degraded"} detail={health.cognee?.connected ? `${health.cognee.tools} tools` : (health.cognee?.error ?? "Docker required")} />
-          <StatusBadge label="Pipeline" status={health.pipeline?.connected ? "connected" : "idle"} />
-          <StatusBadge label="SSE" status={health.sse?.connected ? "connected" : "error"} />
+          <StatusBadge
+            detail={
+              health.brightdata?.connected
+                ? `${health.brightdata.tools} tools`
+                : (health.brightdata?.error ?? "Not connected")
+            }
+            label="Bright Data"
+            status={health.brightdata?.connected ? "connected" : "error"}
+          />
+          <StatusBadge
+            detail={
+              health.cognee?.connected
+                ? `${health.cognee.tools} tools`
+                : (health.cognee?.error ?? "Docker required")
+            }
+            label="Cognee"
+            status={health.cognee?.connected ? "connected" : "degraded"}
+          />
+          <StatusBadge
+            label="Pipeline"
+            status={health.pipeline?.connected ? "connected" : "idle"}
+          />
+          <StatusBadge
+            label="SSE"
+            status={health.sse?.connected ? "connected" : "error"}
+          />
         </div>
       </nav>
 
@@ -163,7 +200,9 @@ function StatusBadge({
       <span className={`h-1.5 w-1.5 rounded-full ${colors[status]}`} />
       <span className="text-[11px] text-zinc-400">{label}</span>
       {detail && (
-        <span className="ml-auto text-[9px] text-zinc-600 truncate max-w-[80px]">{detail}</span>
+        <span className="ml-auto max-w-[80px] truncate text-[9px] text-zinc-600">
+          {detail}
+        </span>
       )}
     </div>
   );

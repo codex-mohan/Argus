@@ -280,7 +280,10 @@ on("lens_analysis_complete", async (event: LensAnalysisComplete) => {
 
     // Persist convergence signal
     if (verdict === "converged" || verdict === "contradicted") {
-      const dominantLens = deduped.reduce((best, f) => f.confidence > best.confidence ? f : best, deduped[0]!).lens as "gtm" | "finance" | "security";
+      const dominantLens = deduped.reduce(
+        (best, f) => (f.confidence > best.confidence ? f : best),
+        deduped[0]!
+      ).lens as "gtm" | "finance" | "security";
       persistSignal({
         id: `corr_${runId}_${Date.now()}`,
         lens: dominantLens,

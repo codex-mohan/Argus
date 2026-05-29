@@ -54,27 +54,52 @@ on("monitor_tick", async (event: MonitorTick) => {
   );
 
   // Extract URLs from search results
-  const urlMatches = search.results.match(/https?:\/\/[^\s\)\]>"]+/g) ?? [];
+  const urlMatches = search.results.match(/https?:\/\/[^\s)\]>"]+/g) ?? [];
   const urls = urlMatches
     .slice(0, 2)
-    .filter((u: string) => !(u.includes("google.com") || u.includes("bing.com")));
+    .filter(
+      (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
+    );
 
-  console.log(`[market-data-bot] Found ${urls.length} URLs: ${urls.join(", ")}`);
+  console.log(
+    `[market-data-bot] Found ${urls.length} URLs: ${urls.join(", ")}`
+  );
 
   let scrapedContent = search.results;
-  let scrapedUrl = urls[0] ?? `https://finance.search?q=${encodeURIComponent(company)}`;
+  let scrapedUrl =
+    urls[0] ?? `https://finance.search?q=${encodeURIComponent(company)}`;
   let wasScraped = false;
 
   if (urls.length > 0) {
     // Use scraping_browser for financial sites that block scriptless scrapers
-    const isFinanceSite = urls[0]!.includes("yahoo") || urls[0]!.includes("cnbc") || urls[0]!.includes("bloomberg") || urls[0]!.includes("wsj");
-    console.log(`[market-data-bot] Scraping: ${urls[0]}${isFinanceSite ? " (browser)" : ""}`);
-    emitStep(runId, "market-data-bot", 3, "Scrape", `Scraping ${urls[0]}...`, "running", 70);
-    const scrape = await smartScrape({ url: urls[0]!, dataType: "price", preferredMethod: isFinanceSite ? "browser" : "structured" });
+    const isFinanceSite =
+      urls[0]!.includes("yahoo") ||
+      urls[0]!.includes("cnbc") ||
+      urls[0]!.includes("bloomberg") ||
+      urls[0]!.includes("wsj");
+    console.log(
+      `[market-data-bot] Scraping: ${urls[0]}${isFinanceSite ? " (browser)" : ""}`
+    );
+    emitStep(
+      runId,
+      "market-data-bot",
+      3,
+      "Scrape",
+      `Scraping ${urls[0]}...`,
+      "running",
+      70
+    );
+    const scrape = await smartScrape({
+      url: urls[0]!,
+      dataType: "price",
+      preferredMethod: isFinanceSite ? "browser" : "structured",
+    });
     scrapedContent = scrape.content;
     scrapedUrl = urls[0]!;
     wasScraped = !scrape.fromCache;
-    console.log(`[market-data-bot] Scraped ${scrapedContent.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`);
+    console.log(
+      `[market-data-bot] Scraped ${scrapedContent.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`
+    );
     if (scrape.fromCache) {
       const stale = checkStaleness(
         {
@@ -159,7 +184,10 @@ on("monitor_tick", async (event: MonitorTick) => {
     20
   );
 
-  const search = await smartSearch(`${company} news today cnbc reuters bloomberg`, "news");
+  const search = await smartSearch(
+    `${company} news today cnbc reuters bloomberg`,
+    "news"
+  );
 
   emitStep(
     runId,
@@ -171,21 +199,41 @@ on("monitor_tick", async (event: MonitorTick) => {
     40
   );
 
-  const urlMatches = search.results.match(/https?:\/\/[^\s\)\]>"]+/g) ?? [];
+  const urlMatches = search.results.match(/https?:\/\/[^\s)\]>"]+/g) ?? [];
   const urls = urlMatches
     .slice(0, 3)
-    .filter((u: string) => !(u.includes("google.com") || u.includes("bing.com")));
+    .filter(
+      (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
+    );
 
   let detail = "";
-  let scrapedUrl = urls[0] ?? `https://news.search?q=${encodeURIComponent(company)}`;
+  let scrapedUrl =
+    urls[0] ?? `https://news.search?q=${encodeURIComponent(company)}`;
 
   if (urls.length > 0) {
-    const isFinanceSite = urls[0]!.includes("yahoo") || urls[0]!.includes("cnbc") || urls[0]!.includes("bloomberg");
-    emitStep(runId, "news-data-bot", 3, "Scrape", `Scraping ${urls[0]}${isFinanceSite ? " (browser)" : ""}...`, "running", 60);
-    const scrape = await smartScrape({ url: urls[0]!, dataType: "news", preferredMethod: isFinanceSite ? "browser" : undefined });
+    const isFinanceSite =
+      urls[0]!.includes("yahoo") ||
+      urls[0]!.includes("cnbc") ||
+      urls[0]!.includes("bloomberg");
+    emitStep(
+      runId,
+      "news-data-bot",
+      3,
+      "Scrape",
+      `Scraping ${urls[0]}${isFinanceSite ? " (browser)" : ""}...`,
+      "running",
+      60
+    );
+    const scrape = await smartScrape({
+      url: urls[0]!,
+      dataType: "news",
+      preferredMethod: isFinanceSite ? "browser" : undefined,
+    });
     detail = scrape.content;
     scrapedUrl = urls[0]!;
-    console.log(`[news-data-bot] Scraped ${detail.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`);
+    console.log(
+      `[news-data-bot] Scraped ${detail.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`
+    );
     if (scrape.fromCache) {
       const stale = checkStaleness(
         {
@@ -265,24 +313,67 @@ on("monitor_tick", async (event: MonitorTick) => {
     "social-data-bot",
     1,
     "Search",
-    `Searching social signals for ${company}...`,
+    `Searching LinkedIn & social signals for ${company}...`,
     "running",
-    25
+    20
   );
 
   const search = await smartSearch(
-    `${company} LinkedIn hiring jobs 2026`,
+    `${company} LinkedIn hiring jobs headcount 2026`,
     "social"
   );
+
+  // Extract real URLs from search results
+  const urlMatches = search.results.match(/https?:\/\/[^\s)\]>"]+/g) ?? [];
+  const urls = urlMatches
+    .slice(0, 2)
+    .filter(
+      (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
+    );
+
+  let scrapedContent = search.results;
+  let scrapedUrl = urls[0] ?? "";
+
+  if (urls.length > 0) {
+    emitStep(
+      runId,
+      "social-data-bot",
+      2,
+      "Scrape",
+      `Scraping ${urls[0]}...`,
+      "running",
+      60
+    );
+    const scrape = await smartScrape({ url: urls[0]!, dataType: "social" });
+    scrapedContent = scrape.content || search.results;
+    scrapedUrl = urls[0]!;
+    console.log(
+      `[social-data-bot] Scraped ${scrapedContent.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`
+    );
+  }
+
+  // If no real URL found, skip rather than emit a fake one
+  if (!scrapedUrl) {
+    emitStep(
+      runId,
+      "social-data-bot",
+      3,
+      "Skip",
+      `No real social URLs found for ${company} — skipping`,
+      "skipped",
+      100
+    );
+    return;
+  }
 
   emitStep(
     runId,
     "social-data-bot",
-    2,
+    3,
     "Store",
     `Storing social signals for ${company}...`,
     "running",
-    75
+    85
   );
 
   const evidence: EvidenceCollected = {
@@ -291,8 +382,14 @@ on("monitor_tick", async (event: MonitorTick) => {
     agentId: "social-data-bot",
     company,
     dataType: "social",
-    sourceUrl: `https://social.search?q=${encodeURIComponent(company)}`,
-    receipt: search.receipt,
+    sourceUrl: scrapedUrl,
+    receipt: {
+      raw: scrapedContent,
+      method: urls.length > 0 ? "scrape" : "search",
+      costTier: urls.length > 0 ? 1 : 0,
+      durationMs: 0,
+      url: scrapedUrl,
+    },
     scrapedAt: new Date().toISOString(),
     fromCache: search.fromCache,
   };
@@ -302,9 +399,9 @@ on("monitor_tick", async (event: MonitorTick) => {
   emitStep(
     runId,
     "social-data-bot",
-    3,
+    4,
     "Complete",
-    `SocialDataBot: ${search.fromCache ? "cached" : "live"} data for ${company}`,
+    `SocialDataBot: ${urls.length > 0 ? "scraped" : "search-only"} data for ${company}`,
     "success",
     100
   );
@@ -323,24 +420,66 @@ on("monitor_tick", async (event: MonitorTick) => {
     "supplier-data-bot",
     1,
     "Search",
-    `Searching supplier data for ${company}...`,
+    `Searching supply chain signals for ${company}...`,
     "running",
-    25
+    20
   );
 
   const search = await smartSearch(
-    `${company} supply chain supplier TSMC Samsung Intel 2026`,
+    `${company} supply chain supplier TSMC Samsung manufacturing delay 2026`,
     "supplier"
   );
+
+  // Extract real URLs — prefer Reuters, Bloomberg, DigiTimes for supply chain news
+  const urlMatches = search.results.match(/https?:\/\/[^\s)\]>"]+/g) ?? [];
+  const urls = urlMatches
+    .slice(0, 2)
+    .filter(
+      (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
+    );
+
+  let scrapedContent = search.results;
+  let scrapedUrl = urls[0] ?? "";
+
+  if (urls.length > 0) {
+    emitStep(
+      runId,
+      "supplier-data-bot",
+      2,
+      "Scrape",
+      `Scraping ${urls[0]}...`,
+      "running",
+      60
+    );
+    const scrape = await smartScrape({ url: urls[0]!, dataType: "supplier" });
+    scrapedContent = scrape.content || search.results;
+    scrapedUrl = urls[0]!;
+    console.log(
+      `[supplier-data-bot] Scraped ${scrapedContent.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`
+    );
+  }
+
+  if (!scrapedUrl) {
+    emitStep(
+      runId,
+      "supplier-data-bot",
+      3,
+      "Skip",
+      `No real supplier URLs found for ${company} — skipping`,
+      "skipped",
+      100
+    );
+    return;
+  }
 
   emitStep(
     runId,
     "supplier-data-bot",
-    2,
+    3,
     "Store",
-    `Storing supplier signals for ${company}...`,
+    `Storing supplier data for ${company}...`,
     "running",
-    75
+    85
   );
 
   const evidence: EvidenceCollected = {
@@ -349,8 +488,14 @@ on("monitor_tick", async (event: MonitorTick) => {
     agentId: "supplier-data-bot",
     company,
     dataType: "supplier",
-    sourceUrl: `https://supplier.search?q=${encodeURIComponent(company)}`,
-    receipt: search.receipt,
+    sourceUrl: scrapedUrl,
+    receipt: {
+      raw: scrapedContent,
+      method: urls.length > 0 ? "scrape" : "search",
+      costTier: urls.length > 0 ? 1 : 0,
+      durationMs: 0,
+      url: scrapedUrl,
+    },
     scrapedAt: new Date().toISOString(),
     fromCache: search.fromCache,
   };
@@ -360,9 +505,9 @@ on("monitor_tick", async (event: MonitorTick) => {
   emitStep(
     runId,
     "supplier-data-bot",
-    3,
+    4,
     "Complete",
-    `SupplierDataBot: ${search.fromCache ? "cached" : "live"} data for ${company}`,
+    `SupplierDataBot: ${urls.length > 0 ? "scraped" : "search-only"} data for ${company}`,
     "success",
     100
   );
@@ -381,24 +526,82 @@ on("monitor_tick", async (event: MonitorTick) => {
     "filing-data-bot",
     1,
     "Search",
-    `Searching SEC filings for ${company}...`,
+    `Searching SEC EDGAR for ${company} filings...`,
     "running",
-    25
+    20
   );
 
   const search = await smartSearch(
-    `site:sec.gov ${company} 8-K filing 2026`,
+    `site:sec.gov ${company} 8-K 10-K filing 2026`,
     "filing"
   );
+
+  // Extract real SEC.gov URLs — these are publicly accessible and don't need a scraping browser
+  const urlMatches =
+    search.results.match(/https?:\/\/(?:www\.)?sec\.gov[^\s)\]>"]+/g) ?? [];
+  // Also try non-SEC financial news that covers filings
+  const newsMatches = search.results.match(/https?:\/\/[^\s)\]>"]+/g) ?? [];
+  const urls = [
+    ...urlMatches.slice(0, 1),
+    ...newsMatches
+      .filter(
+        (u: string) =>
+          !(
+            u.includes("google.com") ||
+            u.includes("bing.com") ||
+            u.includes("sec.gov")
+          )
+      )
+      .slice(0, 1),
+  ].slice(0, 2);
+
+  let scrapedContent = search.results;
+  let scrapedUrl = urls[0] ?? "";
+
+  if (urls.length > 0) {
+    emitStep(
+      runId,
+      "filing-data-bot",
+      2,
+      "Scrape",
+      `Scraping ${urls[0]}...`,
+      "running",
+      60
+    );
+    // SEC.gov is accessible via scrape_as_markdown; prefer that over browser
+    const scrape = await smartScrape({
+      url: urls[0]!,
+      dataType: "filing",
+      preferredMethod: "structured",
+    });
+    scrapedContent = scrape.content || search.results;
+    scrapedUrl = urls[0]!;
+    console.log(
+      `[filing-data-bot] Scraped ${scrapedContent.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`
+    );
+  }
+
+  if (!scrapedUrl) {
+    emitStep(
+      runId,
+      "filing-data-bot",
+      3,
+      "Skip",
+      `No real SEC/filing URLs found for ${company} — skipping`,
+      "skipped",
+      100
+    );
+    return;
+  }
 
   emitStep(
     runId,
     "filing-data-bot",
-    2,
+    3,
     "Store",
     `Storing filing data for ${company}...`,
     "running",
-    75
+    85
   );
 
   const evidence: EvidenceCollected = {
@@ -407,8 +610,14 @@ on("monitor_tick", async (event: MonitorTick) => {
     agentId: "filing-data-bot",
     company,
     dataType: "filing",
-    sourceUrl: `https://sec.search?q=${encodeURIComponent(company)}`,
-    receipt: search.receipt,
+    sourceUrl: scrapedUrl,
+    receipt: {
+      raw: scrapedContent,
+      method: urls.length > 0 ? "scrape" : "search",
+      costTier: urls.length > 0 ? 1 : 0,
+      durationMs: 0,
+      url: scrapedUrl,
+    },
     scrapedAt: new Date().toISOString(),
     fromCache: search.fromCache,
   };
@@ -418,9 +627,9 @@ on("monitor_tick", async (event: MonitorTick) => {
   emitStep(
     runId,
     "filing-data-bot",
-    3,
+    4,
     "Complete",
-    `FilingDataBot: ${search.fromCache ? "cached" : "live"} data for ${company}`,
+    `FilingDataBot: ${urls.length > 0 ? "scraped" : "search-only"} data for ${company}`,
     "success",
     100
   );

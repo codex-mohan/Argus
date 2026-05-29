@@ -73,7 +73,10 @@ function LensColumn({
     <div className="relative flex flex-col gap-3 border-border-subtle border-r p-5 transition-colors last:border-r-0 hover:bg-white/[0.015]">
       <div className="flex items-center justify-between border-border-subtle border-b pb-2">
         <div className="flex items-center gap-2 font-display font-semibold text-text-secondary text-xs uppercase tracking-wide">
-          <div className="h-2 w-2 rounded-full" style={{ background: color, boxShadow: `0 0 10px ${glow}` }} />
+          <div
+            className="h-2 w-2 rounded-full"
+            style={{ background: color, boxShadow: `0 0 10px ${glow}` }}
+          />
           {title}
         </div>
         <div className="rounded border border-border-subtle bg-base px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
@@ -122,9 +125,9 @@ function LensColumn({
 
       <div className="mt-auto flex items-center justify-between border-border-subtle border-t pt-3">
         <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
           className="cursor-pointer text-[10px] text-text-muted tracking-wide transition-colors hover:text-text-primary"
+          onClick={() => setExpanded(!expanded)}
+          type="button"
         >
           {expanded ? "Collapse" : `Open ${title.split(" ")[0]} Brief`}
         </button>

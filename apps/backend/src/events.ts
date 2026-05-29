@@ -441,7 +441,8 @@ export const REPLAY_SCENARIOS: Record<
         confidence: 0.9,
         reasoning:
           "Price movement is a primary finance signal; stock decline also indicates vendor stability concerns for security lens.",
-        rawData: "NVIDIA stock price dropped 5.2% to $112.34 amid broader semiconductor sell-off.",
+        rawData:
+          "NVIDIA stock price dropped 5.2% to $112.34 amid broader semiconductor sell-off.",
       },
       {
         type: "fact_classified",
@@ -457,7 +458,8 @@ export const REPLAY_SCENARIOS: Record<
         confidence: 0.85,
         reasoning:
           "Guidance cut is finance-primary; creates competitor opportunity (GTM) and reveals supply chain vulnerability (security).",
-        rawData: "NVIDIA cuts Q2 revenue guidance by $2B citing Blackwell supply constraints from TSMC delays.",
+        rawData:
+          "NVIDIA cuts Q2 revenue guidance by $2B citing Blackwell supply constraints from TSMC delays.",
       },
       {
         type: "fact_classified",
@@ -472,7 +474,8 @@ export const REPLAY_SCENARIOS: Record<
         confidence: 0.8,
         reasoning:
           "Supply chain disruption is security-primary; has direct financial impact (finance) and competitive positioning effect (GTM).",
-        rawData: "TSMC delays 3nm production by 6 weeks, impacting NVIDIA Blackwell chip shipments per Digitimes report.",
+        rawData:
+          "TSMC delays 3nm production by 6 weeks, impacting NVIDIA Blackwell chip shipments per Digitimes report.",
       },
       {
         type: "lens_analysis_complete",

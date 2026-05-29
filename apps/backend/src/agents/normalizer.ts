@@ -4,9 +4,24 @@
  * Normalizer + Classifier — Event-driven fact extraction and lens routing
  *
  * Subscribes to EvidenceCollected events.
- * Extracts structured facts from raw evidence.
+ * Extracts structured facts from raw evidence using LLM with expert prompt loaded from prompts/normalizer.md.
  * Classifies each fact into primary + secondary lenses.
  */
+
+const PROMPT_DIR = `${import.meta.dir}/prompts`;
+let normalizerPromptTemplate = "";
+try {
+  normalizerPromptTemplate = await Bun.file(
+    `${PROMPT_DIR}/normalizer.md`
+  ).text();
+  console.log(
+    `[normalizer] Loaded normalizer prompt (${normalizerPromptTemplate.length} chars)`
+  );
+} catch {
+  console.warn(
+    "[normalizer] Could not load normalizer.md, using inline fallback"
+  );
+}
 
 import type {
   EvidenceCollected,
@@ -161,8 +176,18 @@ on("evidence_collected", async (event: EvidenceCollected) => {
   const { runId, agentId, company, dataType, sourceUrl, receipt } = event;
   const rawText = receipt.raw;
 
-  emitStep(runId, "normalizer", 1, "Extract", `Extracting facts from ${agentId} (${rawText.length} chars)...`, "running", 30);
-  console.log(`[normalizer] ${agentId} evidence: ${dataType}, ${rawText.length} chars`);
+  emitStep(
+    runId,
+    "normalizer",
+    1,
+    "Extract",
+    `Extracting facts from ${agentId} (${rawText.length} chars)...`,
+    "running",
+    30
+  );
+  console.log(
+    `[normalizer] ${agentId} evidence: ${dataType}, ${rawText.length} chars`
+  );
 
   const facts: FactExtracted[] = [];
 
@@ -171,14 +196,28 @@ on("evidence_collected", async (event: EvidenceCollected) => {
   if (apiKey && rawText.length > 50) {
     try {
       const { default: OpenAI } = await import("openai");
-      const client = new OpenAI({ apiKey, baseURL: "https://api.aimlapi.com/v1" });
+      const client = new OpenAI({
+        apiKey,
+        baseURL: "https://api.aimlapi.com/v1",
+      });
 
-      const llmPrompt = `Extract specific, quantitative facts from this scraped web content about ${company}. Do NOT summarize or speculate. Extract ONLY what is explicitly stated.
+      // Build the normalizer prompt — use loaded .md template if available, else inline
+      const llmPrompt =
+        normalizerPromptTemplate.length > 100
+          ? normalizerPromptTemplate
+              .replace("{sourceUrl}", sourceUrl)
+              .replace("{dataType}", dataType)
+              .replace("{content}", rawText.slice(0, 8000))
+          : `Extract specific, quantitative facts from this scraped web content about ${company}. Do NOT summarize. Extract ONLY explicitly stated facts with numbers, dates, names, or percentages.
 
-For each fact, provide:
-- WHAT: A specific, factual claim (include numbers, dates, names, amounts if present)
-- CONFIDENCE: 0.0-1.0 based on how clearly the source states this (structured data=0.9, article text=0.7, search snippet=0.5)
-- LENS: gtm (competitor moves, hiring, product launches, buying intent), finance (price, revenue, earnings, filings, guidance), or security (regulatory, lawsuits, supplier risk, breaches)
+BAD fact (too vague): "Company faces challenges"
+GOOD fact: "NVIDIA stock fell 5.2% to $112.34 on May 29, 2026"
+
+For each fact provide:
+- claim: A specific factual claim with at least one concrete data point
+- confidence: 0.0-1.0 (structured data=0.9, full article=0.7, search snippet=0.5)
+- lens: gtm | finance | security
+- secondary (optional): second lens if applicable
 
 SOURCE URL: ${sourceUrl}
 DATA TYPE: ${dataType}
@@ -186,7 +225,7 @@ DATA TYPE: ${dataType}
 SCRAPED CONTENT:
 ${rawText.slice(0, 8000)}
 
-Format each fact as JSON objects in a JSON array. Assign at least one lens and optionally a secondary:
+Return JSON array only:
 [{"claim": "...", "confidence": 0.X, "lens": "finance", "secondary": "gtm"}]`;
 
       const completion = await client.chat.completions.create({
@@ -200,7 +239,12 @@ Format each fact as JSON objects in a JSON array. Assign at least one lens and o
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         try {
-          const parsed = JSON.parse(jsonMatch[0]) as Array<{ claim: string; confidence: number; lens: string; secondary?: string }>;
+          const parsed = JSON.parse(jsonMatch[0]) as Array<{
+            claim: string;
+            confidence: number;
+            lens: string;
+            secondary?: string;
+          }>;
           for (const item of parsed) {
             if (item.claim && item.confidence && item.lens) {
               facts.push({
@@ -215,15 +259,25 @@ Format each fact as JSON objects in a JSON array. Assign at least one lens and o
                 evidence: receipt,
                 rawData: rawText.slice(0, 3000),
                 suggestedLens: item.lens as "gtm" | "finance" | "security",
-                suggestedSecondary: item.secondary as "gtm" | "finance" | "security" | undefined,
+                suggestedSecondary: item.secondary as
+                  | "gtm"
+                  | "finance"
+                  | "security"
+                  | undefined,
               });
             }
           }
-          console.log(`[normalizer] LLM extracted ${facts.length} facts from ${rawText.length} chars`);
-        } catch { /* JSON parse failed */ }
+          console.log(
+            `[normalizer] LLM extracted ${facts.length} facts from ${rawText.length} chars`
+          );
+        } catch {
+          /* JSON parse failed */
+        }
       }
     } catch (err) {
-      console.log(`[normalizer] LLM extraction failed: ${err instanceof Error ? err.message : String(err)}, falling back to regex`);
+      console.log(
+        `[normalizer] LLM extraction failed: ${err instanceof Error ? err.message : String(err)}, falling back to regex`
+      );
     }
   }
 
@@ -265,20 +319,30 @@ Format each fact as JSON objects in a JSON array. Assign at least one lens and o
         evidence: receipt,
         rawData: rawText.slice(0, 3000),
       });
-      console.log(`[normalizer] No facts extracted — created generic fallback`);
+      console.log("[normalizer] No facts extracted — created generic fallback");
     }
   }
 
   console.log(`[normalizer] Extracted ${facts.length} facts (${dataType})`);
 
-  emitStep(runId, "normalizer", 2, "Classify", `Classifying ${facts.length} facts for ${company}...`, "running", 70);
+  emitStep(
+    runId,
+    "normalizer",
+    2,
+    "Classify",
+    `Classifying ${facts.length} facts for ${company}...`,
+    "running",
+    70
+  );
 
   // Classify each fact
   for (const fact of facts) {
     const classification = fact.suggestedLens
       ? {
           primary: fact.suggestedLens,
-          secondary: (fact.suggestedSecondary ? [fact.suggestedSecondary] : []) as Array<"gtm" | "finance" | "security">,
+          secondary: (fact.suggestedSecondary
+            ? [fact.suggestedSecondary]
+            : []) as Array<"gtm" | "finance" | "security">,
           reasoning: "LLM-classified",
         }
       : classifyFact(fact.claim, dataType);
@@ -300,7 +364,15 @@ Format each fact as JSON objects in a JSON array. Assign at least one lens and o
     emit(classified);
   }
 
-  emitStep(runId, "normalizer", 3, "Complete", `Normalized ${facts.length} facts for ${company}`, "success", 100);
+  emitStep(
+    runId,
+    "normalizer",
+    3,
+    "Complete",
+    `Normalized ${facts.length} facts for ${company}`,
+    "success",
+    100
+  );
 });
 
 console.log("[agents/normalizer] Normalizer + Classifier registered");
