@@ -109,6 +109,7 @@ async function analyzeLens(
   company: string,
   facts: FactClassified[]
 ): Promise<void> {
+  console.log(`[lenses] analyzeLens: ${lens} for ${company} (${facts.length} facts)`);
   emitStep(
     runId,
     `${lens}-lens`,
@@ -192,10 +193,12 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
 
   try {
     const agent = getLensAgent(lens);
+    console.log(`[lenses] ${lens}/${company}: calling LLM (${prompt.length} chars prompt)...`);
     const events: unknown[] = [];
     for await (const event of agent.run(prompt)) {
       events.push(event);
     }
+    console.log(`[lenses] ${lens}/${company}: LLM returned ${events.length} events`);
 
     // Extract final text
     let text = "";
@@ -234,6 +237,7 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
       }
     }
   } catch (err) {
+    console.error(`[lenses] ${lens}/${company}: LLM failed — ${err instanceof Error ? err.message : String(err)}`);
     emitStep(
       runId,
       `${lens}-lens`,
@@ -260,6 +264,7 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
     detail: `Score ${score}/100 (confidence ${confidence.toFixed(2)})`,
     timestamp: new Date().toISOString(),
   });
+  console.log(`[lenses] ${lens}/${company}: complete — score ${score}/100, confidence ${confidence.toFixed(2)}, headline: ${headline.slice(0, 80)}`);
 
   // 6. Store finding in Cognee
   const finding = {

@@ -3,6 +3,44 @@
 import { useState } from "react";
 import { useSignalStream } from "@/lib/api.ts";
 
+function SignalCard({ signal }: { signal: import("@/lib/api.ts").Signal }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border border-zinc-800 bg-zinc-950 cursor-pointer" onClick={() => setOpen(!open)}>
+      <div className="p-3">
+        <div className="mb-1 flex items-center gap-2">
+          <span className={`rounded px-1.5 py-0.5 font-bold text-[10px] uppercase ${
+            signal.lens === "gtm" ? "bg-amber-500/20 text-amber-300" : signal.lens === "finance" ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"
+          }`}>{signal.lens}</span>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
+            signal.severity === "high" || signal.severity === "critical" ? "bg-red-900/50 text-red-300" : signal.severity === "medium" ? "bg-amber-900/50 text-amber-300" : "bg-zinc-800 text-zinc-400"
+          }`}>{signal.severity}</span>
+          <span className="ml-auto text-[10px] text-zinc-600">{new Date(signal.detected_at).toLocaleTimeString()}</span>
+          <span className="text-[10px] text-zinc-500">{open ? "\u2212" : "+"}</span>
+        </div>
+        <h3 className="font-medium text-sm text-zinc-200">{signal.headline}</h3>
+        <p className="mt-1 text-xs text-zinc-400 leading-relaxed line-clamp-2">{signal.synthesis}</p>
+        <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-600">
+          <span>confidence: {(signal.confidence * 100).toFixed(0)}%</span>
+          <span>agent: {signal.agent_id}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="border-zinc-800 border-t p-3 bg-zinc-900/50">
+          <p className="text-xs text-zinc-300 leading-relaxed mb-3">{signal.synthesis}</p>
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Source URLs</div>
+          <div className="space-y-1">
+            {signal.source_urls.map((u, i) => (
+              <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="block text-[10px] text-zinc-500 hover:text-zinc-300 truncate">{u}</a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SignalsPage() {
   const { signals, connected, error } = useSignalStream();
   const [filter, setFilter] = useState<"all" | "gtm" | "finance" | "security">(
@@ -78,56 +116,7 @@ export default function SignalsPage() {
           </div>
         )}
         {filtered.map((signal) => (
-          <div
-            className="border border-zinc-800 bg-zinc-950 p-3"
-            key={signal.id}
-          >
-            <div className="mb-1 flex items-center gap-2">
-              <span
-                className={`rounded px-1.5 py-0.5 font-bold text-[10px] uppercase ${
-                  signal.lens === "gtm"
-                    ? "bg-amber-500/20 text-amber-300"
-                    : signal.lens === "finance"
-                      ? "bg-emerald-500/20 text-emerald-300"
-                      : "bg-red-500/20 text-red-300"
-                }`}
-              >
-                {signal.lens}
-              </span>
-              <span
-                className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
-                  signal.severity === "high" || signal.severity === "critical"
-                    ? "bg-red-900/50 text-red-300"
-                    : signal.severity === "medium"
-                      ? "bg-amber-900/50 text-amber-300"
-                      : "bg-zinc-800 text-zinc-400"
-                }`}
-              >
-                {signal.severity}
-              </span>
-              <span className="ml-auto text-[10px] text-zinc-600">
-                {new Date(signal.detected_at).toLocaleTimeString()}
-              </span>
-            </div>
-            <h3 className="font-medium text-sm text-zinc-200">
-              {signal.headline}
-            </h3>
-            <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
-              {signal.synthesis}
-            </p>
-            <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-600">
-              <span>confidence: {(signal.confidence * 100).toFixed(0)}%</span>
-              <span>agent: {signal.agent_id}</span>
-              <a
-                className="text-zinc-500 hover:text-zinc-300"
-                href={signal.source_urls[0]}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                source ↗
-              </a>
-            </div>
-          </div>
+          <SignalCard key={signal.id} signal={signal} />
         ))}
       </div>
     </div>
