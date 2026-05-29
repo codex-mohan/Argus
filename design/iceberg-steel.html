@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Argus — Iceberg</title>
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,500,400&f[]=satoshi@700,500,400&display=swap"
+      rel="stylesheet"
+    >
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      padding: 0;
+      margin: 0;
+    }
+    :root {
+      --bg-root: #060b14;
+      --bg-card: #0b1224;
+      --bg-elevated: #111d36;
+      --bg-hover: #162544;
+      --border-default: #1c3060;
+      --border-active: #5090ff;
+      --text-primary: #e4edfa;
+      --text-secondary: #7894c2;
+      --text-muted: #3d5680;
+      --accent: #5090ff;
+      --accent-dim: rgba(80, 144, 255, 0.1);
+      --accent-glow: rgba(80, 144, 255, 0.05);
+      --rose: #ff5875;
+      --emerald: #3ce398;
+      --teal: #3cd4e3;
+      --radius: 6px;
+      --font-display: "Cabinet Grotesk", sans-serif;
+      --font-body: "Satoshi", sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
+    }
+    html,
+    body {
+      height: 100%;
+    }
+    body {
+      display: flex;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--text-primary);
+      background: var(--bg-root);
+    }
+    nav {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      padding: 0 28px;
+      background: rgba(6, 11, 20, 0.92);
+      border-bottom: 1px solid var(--border-default);
+      backdrop-filter: blur(20px);
+    }
+    .nav-brand {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .nav-brand span {
+      -webkit-text-fill-color: transparent;
+      background: linear-gradient(135deg, #5090ff, #3ce398);
+      -webkit-background-clip: text;
+    }
+    .nav-center {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .nav-company {
+      padding: 7px 16px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius);
+    }
+    .nav-right {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .nav-live {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .nav-live::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent);
+      animation: glow 2s infinite;
+    }
+    @keyframes glow {
+      0%,
+      100% {
+        box-shadow: 0 0 4px var(--accent);
+      }
+      50% {
+        box-shadow: 0 0 14px var(--accent);
+      }
+    }
+    main {
+      display: grid;
+      flex: 1;
+      grid-template-rows: 1fr auto;
+      grid-template-columns: 1fr 340px;
+      gap: 1px;
+      margin-top: 52px;
+      background: var(--border-default);
+    }
+    .panel {
+      padding: 24px 28px;
+      overflow-y: auto;
+      background: var(--bg-root);
+    }
+    .panel-feed {
+      grid-row: 1 / 3;
+    }
+    .panel-title {
+      margin-bottom: 20px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+    .signal-row {
+      display: flex;
+      gap: 16px;
+      padding: 16px 0;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border-default);
+      transition: all 200ms;
+    }
+    .signal-row:hover {
+      padding-right: 14px;
+      padding-left: 14px;
+      margin: 0 -14px;
+      background: var(--bg-card);
+    }
+    .signal-severity {
+      flex-shrink: 0;
+      width: 4px;
+      border-radius: 4px;
+    }
+    .severity-critical {
+      background: var(--rose);
+      box-shadow: 0 0 8px rgba(255, 88, 117, 0.3);
+    }
+    .severity-high {
+      background: var(--accent);
+      box-shadow: 0 0 6px rgba(80, 144, 255, 0.2);
+    }
+    .severity-medium {
+      background: var(--teal);
+    }
+    .severity-low {
+      background: var(--text-muted);
+    }
+    .signal-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .signal-headline {
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .signal-snippet {
+      margin-bottom: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .signal-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .signal-source {
+      padding: 3px 9px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-radius: var(--radius);
+    }
+    .signal-agents {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .signal-time {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .panel-sources {
+    }
+    .source-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .source-card {
+      padding: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius);
+      transition: all 200ms;
+    }
+    .source-card:hover {
+      background: var(--bg-elevated);
+      border-color: var(--accent);
+    }
+    .source-label {
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .source-count {
+      margin-bottom: 6px;
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .source-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .source-spark {
+      display: flex;
+      gap: 3px;
+      align-items: flex-end;
+      height: 28px;
+      margin-top: 10px;
+    }
+    .spark-bar {
+      flex: 1;
+      min-height: 4px;
+      border-radius: 2px 2px 0 0;
+    }
+    .panel-correlations {
+    }
+    .corr-item {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border-default);
+    }
+    .corr-icons {
+      display: flex;
+      gap: 6px;
+    }
+    .corr-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      border-radius: var(--radius);
+    }
+    .ci-accent {
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .ci-teal {
+      color: var(--teal);
+      background: rgba(60, 212, 227, 0.15);
+    }
+    .ci-emerald {
+      color: var(--emerald);
+      background: rgba(60, 227, 152, 0.15);
+    }
+    .corr-body {
+      flex: 1;
+    }
+    .corr-text {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .corr-strength {
+      margin-top: 3px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .corr-bar {
+      width: 52px;
+      height: 4px;
+      overflow: hidden;
+      background: var(--border-default);
+      border-radius: 2px;
+    }
+    .corr-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .panel-brief {
+      grid-column: 1;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border-default);
+    }
+    .brief-headline {
+      margin-bottom: 14px;
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.5px;
+    }
+    .brief-body {
+      margin-bottom: 18px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text-secondary);
+    }
+    .brief-evidences {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .evidence-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 7px 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-radius: var(--radius);
+    }
+    .evidence-row::before {
+      font-size: 13px;
+      content: "↗";
+    }
+    .provider-bar {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+      display: flex;
+      gap: 36px;
+      align-items: center;
+      justify-content: center;
+      height: 34px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      border-top: 1px solid var(--border-default);
+    }
+    .provider-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-right: 8px;
+      border-radius: 50%;
+    }
+    .dot-on {
+      background: var(--emerald);
+      box-shadow: 0 0 4px var(--emerald);
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-default);
+      border-radius: 3px;
+    }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="nav-brand">ARGU<span>S</span></div>
+      <div class="nav-center">
+        <div class="nav-company">NVIDIA Corp (NVDA) ▾</div>
+      </div>
+      <div class="nav-right">
+        <div class="nav-live">3 agents active</div>
+        <div>May 28, 2026 · 14:32 UTC</div>
+      </div>
+    </nav>
+
+    <main>
+      <section class="panel panel-feed">
+        <div class="panel-title">Signal Feed</div>
+        <div class="signal-row">
+          <div class="signal-severity severity-critical"></div>
+          <div class="signal-body">
+            <div class="signal-headline">
+              NVIDIA supplier ecosystem shows synchronized stress across 4 key
+              vendors
+            </div>
+            <div class="signal-snippet">
+              TSMC capacity reduced 15%. ASE Technology Q2 guidance miss. Two
+              packaging suppliers show CDS spreads above 300bps.
+            </div>
+            <div class="signal-meta">
+              <span class="signal-source">reuters.com</span>
+              <span class="signal-source">bloomberg.com</span>
+              <span class="signal-source">sec.gov/edgar</span>
+              <span class="signal-agents"
+                >SupplierBot + FilingBot + NewsBot</span
+              >
+              <span class="signal-time">14:28 UTC</span>
+            </div>
+          </div>
+        </div>
+        <div class="signal-row">
+          <div class="signal-severity severity-high"></div>
+          <div class="signal-body">
+            <div class="signal-headline">
+              NVIDIA H200 list prices dropped 12% across 4 major retailers in 72
+              hours
+            </div>
+            <div class="signal-snippet">
+              Amazon: $31,299 → $27,449. Best Buy: $31,999 → $28,119. CDW:
+              $30,899 → $27,299.
+            </div>
+            <div class="signal-meta">
+              <span class="signal-source">amazon.com</span>
+              <span class="signal-source">bestbuy.com</span>
+              <span class="signal-agents">MarketDataBot · 4 sources</span>
+              <span class="signal-time">13:45 UTC</span>
+            </div>
+          </div>
+        </div>
+        <div class="signal-row">
+          <div class="signal-severity severity-high"></div>
+          <div class="signal-body">
+            <div class="signal-headline">
+              CTO departure at primary GPU substrate supplier — executive risk
+              event
+            </div>
+            <div class="signal-snippet">
+              LinkedIn confirms CTO → "Advisor" transition at key supplier. 3
+              senior engineering reqs posted in 48h.
+            </div>
+            <div class="signal-meta">
+              <span class="signal-source">linkedin.com</span>
+              <span class="signal-agents">SocialDataBot</span>
+              <span class="signal-time">12:10 UTC</span>
+            </div>
+          </div>
+        </div>
+        <div class="signal-row">
+          <div class="signal-severity severity-medium"></div>
+          <div class="signal-body">
+            <div class="signal-headline">
+              NVIDIA 8-K: Component allocation changes for Q3 production
+            </div>
+            <div class="signal-snippet">
+              Filed 06:15 ET. "Adjusted allocation of advanced packaging
+              capacity." Negative sentiment shift.
+            </div>
+            <div class="signal-meta">
+              <span class="signal-source">sec.gov</span>
+              <span class="signal-agents">FilingDataBot</span>
+              <span class="signal-time">11:22 UTC</span>
+            </div>
+          </div>
+        </div>
+        <div class="signal-row">
+          <div class="signal-severity severity-low"></div>
+          <div class="signal-body">
+            <div class="signal-headline">
+              Unusual X activity: 3 NVIDIA engineers update profiles within 24h
+            </div>
+            <div class="signal-snippet">
+              Pattern detection on 3 "CUDA" engineers. No job changes yet.
+              Monitoring.
+            </div>
+            <div class="signal-meta">
+              <span class="signal-source">x.com</span>
+              <span class="signal-agents">SocialDataBot</span>
+              <span class="signal-time">09:45 UTC</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-sources">
+        <div class="panel-title">Data Sources</div>
+        <div class="source-grid">
+          <div class="source-card">
+            <div class="source-label">Filings</div>
+            <div class="source-count" style="color:var(--teal)">14</div>
+            <div class="source-sub">new documents</div>
+            <div class="source-spark">
+              <div
+                class="spark-bar"
+                style="height:8px;background:var(--teal)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:12px;background:var(--teal)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:6px;background:var(--teal)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:18px;background:var(--teal)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:10px;background:var(--teal)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:14px;background:var(--teal)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:20px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:16px;background:var(--accent)"
+              ></div>
+            </div>
+          </div>
+          <div class="source-card">
+            <div class="source-label">Social</div>
+            <div class="source-count" style="color:var(--accent)">3</div>
+            <div class="source-sub">profile changes</div>
+            <div class="source-spark">
+              <div
+                class="spark-bar"
+                style="height:6px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:8px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:5px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:12px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:7px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:15px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:10px;background:var(--accent)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:22px;background:var(--accent)"
+              ></div>
+            </div>
+          </div>
+          <div class="source-card">
+            <div class="source-label">Supplier</div>
+            <div class="source-count" style="color:var(--rose)">2</div>
+            <div class="source-sub">risk alerts</div>
+            <div class="source-spark">
+              <div
+                class="spark-bar"
+                style="height:10px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:15px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:8px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:20px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:12px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:18px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:26px;background:var(--rose)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:22px;background:var(--rose)"
+              ></div>
+            </div>
+          </div>
+          <div class="source-card">
+            <div class="source-label">Market</div>
+            <div class="source-count" style="color:var(--emerald)">−12%</div>
+            <div class="source-sub">price decline</div>
+            <div class="source-spark">
+              <div
+                class="spark-bar"
+                style="height:24px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:20px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:18px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:14px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:10px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:8px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:5px;background:var(--emerald)"
+              ></div>
+              <div
+                class="spark-bar"
+                style="height:3px;background:var(--emerald)"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-correlations">
+        <div class="panel-title">Correlations</div>
+        <div class="corr-item">
+          <div class="corr-icons">
+            <div class="corr-icon ci-accent">S</div>
+            <div class="corr-icon ci-teal">F</div>
+          </div>
+          <div class="corr-body">
+            <div class="corr-text">
+              Supplier distress + 8-K filing — same packaging capacity issue
+            </div>
+            <div class="corr-strength">SupplierBot ↔ FilingBot</div>
+          </div>
+          <div class="corr-bar">
+            <div class="corr-bar-fill" style="width:88%"></div>
+          </div>
+        </div>
+        <div class="corr-item">
+          <div class="corr-icons">
+            <div class="corr-icon ci-accent">S</div>
+            <div class="corr-icon ci-emerald">M</div>
+          </div>
+          <div class="corr-body">
+            <div class="corr-text">
+              Supplier capacity ↓ correlates with 12% retailer price drop
+            </div>
+            <div class="corr-strength">SupplierBot ↔ MarketDataBot</div>
+          </div>
+          <div class="corr-bar">
+            <div class="corr-bar-fill" style="width:92%"></div>
+          </div>
+        </div>
+        <div class="corr-item">
+          <div class="corr-icons">
+            <div class="corr-icon ci-accent">S</div>
+            <div class="corr-icon ci-accent">S</div>
+          </div>
+          <div class="corr-body">
+            <div class="corr-text">
+              CTO exit + engineer profile updates — talent flight risk
+            </div>
+            <div class="corr-strength">SocialDataBot (2 obs)</div>
+          </div>
+          <div class="corr-bar">
+            <div class="corr-bar-fill" style="width:62%"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-brief">
+        <div class="brief-headline">
+          NVIDIA Q3 Supply Chain Stress — Multi-Source Alpha Signal
+        </div>
+        <div class="brief-body">
+          Across 5 collection agents and 3 analysis lenses, Argus detected
+          synchronized supply chain stress at NVIDIA. Key suppliers show
+          capacity reductions and credit spread widening — correlated with a 12%
+          retail price decline and a material 8-K filing. CorrelationEngine
+          confidence: 0.88. Historical precedent: similar 3-domain patterns
+          preceded NVIDIA's Q3 2023 guidance revision by 6 days.
+        </div>
+        <div class="brief-evidences">
+          <div class="evidence-row">
+            sec.gov/Archives/edgar/data/1045810/000104581026000039/nvda-20260528.htm
+          </div>
+          <div class="evidence-row">
+            amazon.com/NVIDIA-H200-Tensor-Core-GPU/dp/B0CJVNHXP3
+          </div>
+          <div class="evidence-row">
+            reuters.com/technology/nvidia-suppliers-face-capacity-constraints-2026-05-28/
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="provider-bar">
+      <span
+        ><span class="provider-dot dot-on"></span>
+        Bright Data · 60 tools</span
+      >
+      <span><span class="provider-dot dot-on"></span> Cognee · 47K nodes</span>
+      <span
+        ><span class="provider-dot dot-on"></span>
+        AI/ML API · kimi-k2.6</span
+      >
+      <span style="color:var(--text-muted)">Credits: $247.12 remaining</span>
+    </div>
+  </body>
+</html>
