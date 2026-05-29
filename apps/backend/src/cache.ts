@@ -1,13 +1,13 @@
-/// <reference types="bun" />
+﻿/// <reference types="bun" />
 
 /**
- * Scrape Cache — Cognee-backed deduplication with TTL
+ * Scrape Cache â€” Cognee-backed deduplication with TTL
  *
  * Credit efficiency is survival. Every scrape costs Bright Data credits.
  * This cache ensures:
  *   - Same URL scraped once per TTL period
  *   - Same search query hashed and cached
- *   - Fallback cascade: cache → structured extractor → scrape_as_markdown → scraping_browser → web_unlocker
+ *   - Fallback cascade: cache â†’ structured extractor â†’ scrape_as_markdown â†’ scraping_browser â†’ web_unlocker
  *   - Cost tracking per operation tier
  */
 
@@ -16,14 +16,14 @@ import type { EvidenceReceipt } from "./events.ts";
 import { logCredit } from "./events.ts";
 import { callMcpTool, getMcpTools } from "./mcp/bridge.ts";
 
-// ─── TTL Configuration ─────────────────────────────────────────────────────
+// â”€â”€â”€ TTL Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const TTL_MINUTES: Record<string, number> = {
-  price: 60, // 1 hour — prices change fast
-  filing: 1440, // 24 hours — filings don't change
-  social: 360, // 6 hours — social signals semi-stale
-  supplier: 720, // 12 hours — supplier data medium
-  news: 180, // 3 hours — news updates frequently
+  price: 60, // 1 hour â€” prices change fast
+  filing: 1440, // 24 hours â€” filings don't change
+  social: 360, // 6 hours â€” social signals semi-stale
+  supplier: 720, // 12 hours â€” supplier data medium
+  news: 180, // 3 hours â€” news updates frequently
   default: 360, // 6 hours fallback
 };
 
@@ -31,7 +31,7 @@ function getTtl(dataType: string): number {
   return TTL_MINUTES[dataType] ?? TTL_MINUTES.default ?? 360;
 }
 
-// ─── Query Hashing ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Query Hashing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function hashQuery(query: string): string {
   return createHash("sha256")
@@ -40,7 +40,7 @@ export function hashQuery(query: string): string {
     .slice(0, 16);
 }
 
-// ─── Cache Interface ───────────────────────────────────────────────────────
+// â”€â”€â”€ Cache Interface â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface CacheEntry {
   content: string;
@@ -58,7 +58,7 @@ function memoryKey(url: string, queryHash?: string): string {
   return queryHash ? `q:${queryHash}` : `u:${url}`;
 }
 
-// ─── Cache Check ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Cache Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface CacheCheckResult {
   ageMinutes: number;
@@ -82,7 +82,7 @@ export async function checkCache(
     if (ageMin < ttl) {
       return { hit: true, entry: mem, ageMinutes: ageMin };
     }
-    // Expired — remove
+    // Expired â€” remove
     memoryCache.delete(key);
   }
 
@@ -108,17 +108,17 @@ export async function checkCache(
           return { hit: true, entry: parsed, ageMinutes: ageMin };
         }
       } catch {
-        // Not valid JSON — ignore
+        // Not valid JSON â€” ignore
       }
     }
   } catch {
-    // Cognee unavailable — degraded mode, proceed without cache
+    // Cognee unavailable â€” degraded mode, proceed without cache
   }
 
   return { hit: false, ageMinutes: 0 };
 }
 
-// ─── Cache Store ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Cache Store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function storeCache(
   url: string,
@@ -157,7 +157,7 @@ export async function storeCache(
       dataset_name: `raw_${dataType}_data`,
     });
   } catch {
-    // Cognee unavailable — memory cache still works for this session
+    // Cognee unavailable â€” memory cache still works for this session
   }
 }
 
@@ -189,7 +189,7 @@ export function checkStaleness(
   }
 
   if (ageMin > ttl * 0.75) {
-    // Within 25% of expiry — flag as potentially stale
+    // Within 25% of expiry â€” flag as potentially stale
     return {
       isStale: false,
       ageMinutes: ageMin,
@@ -231,7 +231,7 @@ export function invalidateByDataType(dataType: string): number {
   return count;
 }
 
-// ─── Scheduled Cleanup ─────────────────────────────────────────────────────
+// â”€â”€â”€ Scheduled Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let cleanupInterval: Timer | null = null;
 
@@ -273,7 +273,7 @@ export function stopCacheCleanup(): void {
   }
 }
 
-// ─── Scraping with Fallback Cascade ────────────────────────────────────────
+// â”€â”€â”€ Scraping with Fallback Cascade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface ScrapeOptions {
   dataType: string;
@@ -361,7 +361,7 @@ export async function smartScrape(
     };
   }
 
-  // 6. All failed — return degraded
+  // 6. All failed â€” return degraded
   logCredit("scrape-system", `all_failed:${dataType}`, 1);
   return {
     content: `[unavailable] All scrape methods failed for ${url}. Last error: ${markdown.error ?? "unknown"}`,
@@ -376,7 +376,7 @@ export async function smartScrape(
   };
 }
 
-// ─── Individual Scrape Methods ─────────────────────────────────────────────
+// â”€â”€â”€ Individual Scrape Methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function tryStructuredExtractor(
   url: string,
@@ -422,12 +422,12 @@ async function tryStructuredExtractor(
     try {
       const result = await callMcpTool("brightdata", tool.name, { url });
       const text = extractText(result);
-      if (text && text.length > 50) {
+      if (text && text.length > 50 && !isBlockedPage(text, url)) {
         logCredit("brightdata", `structured:${tool.name}`, 1);
         return {
           content: text,
           receipt: {
-            raw: text.slice(0, 500),
+            raw: text,
             method: `structured:${tool.name}`,
             costTier: 1,
             durationMs: Date.now() - start,
@@ -471,7 +471,7 @@ async function tryScrapeAsMarkdown(url: string): Promise<MethodResult> {
       status: "success",
       content: text,
       receipt: {
-        raw: text.slice(0, 500),
+        raw: text,
         method: "scrape_as_markdown",
         costTier: 2,
         durationMs: Date.now() - start,
@@ -509,7 +509,7 @@ async function tryScrapingBrowser(url: string): Promise<MethodResult> {
       status: "success",
       content: text,
       receipt: {
-        raw: text.slice(0, 500),
+        raw: text,
         method: "scraping_browser",
         costTier: 3,
         durationMs: Date.now() - start,
@@ -547,7 +547,7 @@ async function tryWebUnlocker(url: string): Promise<MethodResult> {
       status: "success",
       content: text,
       receipt: {
-        raw: text.slice(0, 500),
+        raw: text,
         method: "web_unlocker",
         costTier: 3,
         durationMs: Date.now() - start,
@@ -564,7 +564,7 @@ async function tryWebUnlocker(url: string): Promise<MethodResult> {
   }
 }
 
-// ─── Search with Cache ─────────────────────────────────────────────────────
+// â”€â”€â”€ Search with Cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface SearchResult {
   fromCache: boolean;
@@ -623,7 +623,7 @@ export async function smartSearch(
     logCredit("brightdata", "search_engine", 1);
 
     const receipt: EvidenceReceipt = {
-      raw: text.slice(0, 500),
+      raw: text,
       method: "search_engine",
       costTier: 1,
       durationMs: Date.now() - start,
@@ -652,7 +652,13 @@ export async function smartSearch(
   }
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+function isBlockedPage(text: string, url: string): boolean {
+  const lower = text.toLowerCase();
+  const blocked = ["please enable javascript", "enable javascript", "javascript is disabled", "please log in", "sign in to continue", "you need to enable"];
+  if (blocked.some((p) => lower.includes(p))) return true;
+  if (text.length < 500 && (url.includes("yahoo") || url.includes("cnbc") || url.includes("bloomberg") || url.includes("wsj"))) return true;
+  return false;
+}
 
 function extractText(result: {
   content?: Array<{ type: string; text?: string }>;
@@ -664,7 +670,7 @@ function extractText(result: {
     .join("\n");
 }
 
-// ─── Cache Stats ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Cache Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function getCacheStats(): {
   memoryEntries: number;

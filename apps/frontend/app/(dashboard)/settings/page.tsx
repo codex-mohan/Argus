@@ -9,6 +9,10 @@ import {
   updateAgentConfig,
   updatePipelineConfig,
 } from "@/lib/api.ts";
+import { useAuth } from "@/contexts/auth-context.tsx";
+import { TagInput } from "@/components/tag-input.tsx";
+
+const SAVED = { ok: true, msg: "" } as const;
 
 export default function SettingsPage() {
   const [models, setModels] = useState<Awaited<ReturnType<typeof fetchModels>>>(
@@ -22,7 +26,50 @@ export default function SettingsPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [indexing, setIndexing] = useState(false);
+  const [indexResult, setIndexResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [modelSearch, setModelSearch] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const [wlSaving, setWlSaving] = useState(false);
+  const [wlResult, setWlResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const { user, updateUser } = useAuth();
+  const [watchlistTags, setWatchlistTags] = useState<string[]>(user?.watchlist ?? []);
+
+  async function saveWatchlist(tags: string[]) {
+    setWatchlistTags(tags);
+    setWlSaving(true);
+    setWlResult(null);
+    try {
+      const token = localStorage.getItem("argus_token");
+      const res = await fetch("/api/watchlist", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify({ companies: tags }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWlResult({ ok: true, msg: "Watchlist updated" });
+        if (user) updateUser({ ...user, watchlist: tags });
+      } else {
+        setWlResult({ ok: false, msg: data.error ?? "Failed" });
+      }
+    } catch {
+      setWlResult({ ok: false, msg: "Network error" });
+    } finally {
+      setWlSaving(false);
+      setTimeout(() => setWlResult(null), 3000);
+    }
+  }
+
+  const filteredModels = modelSearch
+    ? models.filter(
+        (m) =>
+          m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
+          m.provider.toLowerCase().includes(modelSearch.toLowerCase()) ||
+          m.modelId.toLowerCase().includes(modelSearch.toLowerCase()) ||
+          m.capabilities.some((c) => c.toLowerCase().includes(modelSearch.toLowerCase()))
+      )
+    : models;
 
   useEffect(() => {
     loadAll();
@@ -36,7 +83,9 @@ export default function SettingsPage() {
         fetchAgentConfigs().catch(() => []),
         fetchPipelineConfig().catch(() => []),
       ]);
+      m.sort((x, y) => x.provider.localeCompare(y.provider) || x.name.localeCompare(y.name));
       setModels(m);
+      a.sort((x, y) => x.agentId.localeCompare(y.agentId));
       setAgents(a);
       setPipeline(p);
     } finally {
@@ -46,9 +95,17 @@ export default function SettingsPage() {
 
   async function handleIndex() {
     setIndexing(true);
+    setIndexResult(null);
     try {
-      await indexModels();
+      const result = await indexModels();
+      if (result.success) {
+        setIndexResult({ ok: true, msg: `Indexed ${result.count} models from AI/ML API` });
+      } else {
+        setIndexResult({ ok: false, msg: result.error ?? "Indexing failed" });
+      }
       await loadAll();
+    } catch (err) {
+      setIndexResult({ ok: false, msg: err instanceof Error ? err.message : "Indexing failed" });
     } finally {
       setIndexing(false);
     }
@@ -100,7 +157,7 @@ export default function SettingsPage() {
       <section className="mb-8 border border-zinc-800 bg-zinc-950 p-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold text-sm text-zinc-400 uppercase tracking-wider">
-            Model Catalog ({models.length} models)
+            Model Catalog ({filteredModels.length}{modelSearch ? ` of ${models.length}` : ""} models)
           </h2>
           <button
             className="rounded-md bg-amber-600 px-3 py-1.5 font-semibold text-white text-xs hover:bg-amber-500 disabled:opacity-50"
@@ -110,6 +167,28 @@ export default function SettingsPage() {
           >
             {indexing ? "Indexing..." : "Re-index from AI/ML API"}
           </button>
+        </div>
+
+        {indexResult && (
+          <div
+            className={`mb-3 rounded border px-3 py-2 text-xs ${
+              indexResult.ok
+                ? "border-emerald-800 bg-emerald-950/50 text-emerald-400"
+                : "border-red-800 bg-red-950/50 text-red-400"
+            }`}
+          >
+            {indexResult.msg}
+          </div>
+        )}
+
+        <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Search models by name, provider, or capability..."
+            value={modelSearch}
+            onChange={(e) => setModelSearch(e.target.value)}
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600"
+          />
         </div>
 
         {models.length === 0 && (
@@ -130,7 +209,7 @@ export default function SettingsPage() {
               </tr>
             </thead>
             <tbody className="text-zinc-300">
-              {models.slice(0, 50).map((m) => (
+              {filteredModels.slice(0, 50).map((m) => (
                 <tr className="border-zinc-800 border-t" key={m.modelId}>
                   <td className="py-2 font-mono">{m.name}</td>
                   <td className="py-2">{m.provider}</td>
@@ -157,9 +236,9 @@ export default function SettingsPage() {
               ))}
             </tbody>
           </table>
-          {models.length > 50 && (
+          {filteredModels.length > 50 && (
             <div className="py-2 text-center text-xs text-zinc-500">
-              + {models.length - 50} more models
+              + {filteredModels.length - 50} more models
             </div>
           )}
         </div>
@@ -226,6 +305,19 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* ─── Watchlist ──────────────────────────────────────────────────── */}
+      <section className="mb-8 border border-zinc-800 bg-zinc-950 p-4">
+        <h2 className="mb-4 font-semibold text-sm text-zinc-400 uppercase tracking-wider">
+          Watchlist
+        </h2>
+        <TagInput tags={watchlistTags} onChange={saveWatchlist} saving={wlSaving} placeholder="Add company and press Enter..." />
+        {wlResult && (
+          <div className={`mt-2 text-[10px] ${wlResult.ok ? "text-emerald-400" : "text-red-400"}`}>
+            {wlResult.msg}
+          </div>
+        )}
       </section>
 
       {/* ─── Pipeline Settings ───────────────────────────────────────────── */}

@@ -190,8 +190,8 @@ export function storeModels(models: ModelEntry[]): void {
 
 export function getModels(provider?: string): ModelEntry[] {
   const sql = provider
-    ? "SELECT * FROM model_catalog WHERE provider = ? ORDER BY name"
-    : "SELECT * FROM model_catalog ORDER BY name";
+    ? "SELECT * FROM model_catalog WHERE provider = ? ORDER BY provider, name"
+    : "SELECT * FROM model_catalog ORDER BY provider, name";
 
   const rows = db.query(sql).all(provider ?? []) as Array<
     Record<string, unknown>
@@ -255,76 +255,76 @@ const DEFAULT_AGENT_CONFIGS: Array<Partial<AgentConfig> & { agentId: string }> =
     // ─── Workers: cheap + fast (DeepSeek V4 Flash, 1M ctx) ─────────────────
     {
       agentId: "market-data-bot",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 16_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 32_000,
       temperature: 0.5,
     },
     {
       agentId: "news-data-bot",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 16_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 32_000,
       temperature: 0.5,
     },
     {
       agentId: "social-data-bot",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 16_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 32_000,
       temperature: 0.5,
     },
     {
       agentId: "supplier-data-bot",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 16_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 32_000,
       temperature: 0.5,
     },
     {
       agentId: "filing-data-bot",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 16_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 32_000,
       temperature: 0.5,
     },
     {
       agentId: "gtm-lens",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 32_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 64_000,
       temperature: 0.3,
     },
     {
       agentId: "finance-lens",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 32_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 64_000,
       temperature: 0.3,
     },
     {
       agentId: "security-lens",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 32_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 64_000,
       temperature: 0.3,
     },
     {
       agentId: "normalizer",
-      modelId: "deepseek/deepseek-v4-flash",
+      modelId: "deepseek-v4-flash",
       maxTokens: 1000,
       temperature: 0.1,
     },
     // ─── Orchestration: high-quality reasoning (Kimi K2.6, 256K ctx) ────────
     {
       agentId: "correlation-engine",
-      modelId: "moonshotai/kimi-k2.6",
-      maxTokens: 32_000,
+      modelId: "moonshot/kimi-k2-6",
+      maxTokens: 64_000,
       temperature: 0.2,
     },
     {
       agentId: "brief-writer",
-      modelId: "moonshotai/kimi-k2.6",
-      maxTokens: 64_000,
+      modelId: "moonshot/kimi-k2-6",
+      maxTokens: 128_000,
       temperature: 0.4,
     },
     // ─── Chat: configurable via settings ─────────────────────────────────────
     {
       agentId: "chat-assistant",
-      modelId: "deepseek/deepseek-v4-flash",
-      maxTokens: 32_000,
+      modelId: "deepseek-v4-flash",
+      maxTokens: 64_000,
       temperature: 0.3,
     },
   ];
@@ -570,7 +570,7 @@ export interface ResolvedModel {
 
 export function resolveAgentModel(agentId: string): ResolvedModel {
   const cfg = getAgentConfig(agentId);
-  const modelId = cfg?.modelId ?? "deepseek/deepseek-v4-flash";
+  const modelId = cfg?.modelId ?? "deepseek-v4-flash";
   const parts = modelId.split("/");
   const name = parts.length > 1 ? parts.slice(1).join("/") : modelId;
 
@@ -582,9 +582,54 @@ export function resolveAgentModel(agentId: string): ResolvedModel {
   };
 }
 
+// ─── Seed Model Catalog ─────────────────────────────────────────────────────
+
+const SEED_MODELS: Array<Omit<ModelEntry, "indexedAt">> = [
+  {
+    modelId: "deepseek-v4-flash",
+    name: "deepseek-v4-flash",
+    provider: "deepseek",
+    contextLength: 1_000_000,
+    costPer1mInput: 0.15,
+    costPer1mOutput: 0.60,
+    capabilities: ["chat", "reasoning"],
+  },
+  {
+    modelId: "moonshot/kimi-k2-6",
+    name: "kimi-k2-6",
+    provider: "moonshot",
+    contextLength: 256_000,
+    costPer1mInput: 2.00,
+    costPer1mOutput: 8.00,
+    capabilities: ["chat", "reasoning"],
+  },
+  {
+    modelId: "deepseek/deepseek-chat",
+    name: "deepseek-chat",
+    provider: "deepseek",
+    contextLength: 64_000,
+    costPer1mInput: 0.27,
+    costPer1mOutput: 1.10,
+    capabilities: ["chat", "reasoning"],
+  },
+];
+
+function seedModelCatalog(): void {
+  const now = new Date().toISOString();
+  for (const m of SEED_MODELS) {
+    db.run(
+      `INSERT OR IGNORE INTO model_catalog (model_id, name, provider, context_length, cost_per_1m_input, cost_per_1m_output, capabilities, indexed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [m.modelId, m.name, m.provider, m.contextLength, m.costPer1mInput, m.costPer1mOutput, JSON.stringify(m.capabilities), now]
+    );
+  }
+  console.log(`[config] Seeded ${SEED_MODELS.length} known models into catalog`);
+}
+
 // ─── Init ───────────────────────────────────────────────────────────────────
 
 export function initConfigStore(): void {
+  seedModelCatalog();
   initDefaultConfig();
   initDefaultAgentConfigs();
   console.log("[config] Store initialized with defaults");

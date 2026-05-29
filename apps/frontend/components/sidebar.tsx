@@ -20,39 +20,27 @@ export function Sidebar() {
   const { connected } = useSignalStream();
 
   // Backend health check
-  const [health, setHealth] = useState<{
-    brightdata?: boolean;
-    cognee?: boolean;
-    pipeline?: boolean;
-  }>({});
+  const [health, setHealth] = useState<Record<string, { connected: boolean; tools?: number; error?: string; pipeline?: boolean }>>({});
+  const [mcpDetail, setMcpDetail] = useState<Record<string, { tools: number; error?: string }>>({});
 
   useEffect(() => {
-    fetch("/health")
-      .then((r) => r.json().catch(() => ({})))
-      .then((d) => {
-        setHealth({
-          brightdata: d.mcp?.brightdata?.connected ?? false,
-          cognee: d.mcp?.cognee?.connected ?? false,
-          pipeline: d.pipeline ?? false,
-        });
-      })
-      .catch(() => setHealth({}));
-
-    const id = setInterval(() => {
+    const poll = () => {
       fetch("/health")
         .then((r) => r.json().catch(() => ({})))
         .then((d) => {
           setHealth({
-            brightdata: d.mcp?.brightdata?.connected ?? false,
-            cognee: d.mcp?.cognee?.connected ?? false,
-            pipeline: d.pipeline ?? false,
+            brightdata: { connected: d.mcp?.brightdata?.connected ?? false, tools: d.mcp?.brightdata?.tools ?? 0, error: d.mcp?.brightdata?.error },
+            cognee: { connected: d.mcp?.cognee?.connected ?? false, tools: d.mcp?.cognee?.tools ?? 0, error: d.mcp?.cognee?.error },
+            pipeline: { connected: d.pipeline ?? false },
+            sse: { connected },
           });
         })
         .catch(() => setHealth({}));
-    }, 5000);
-
+    };
+    poll();
+    const id = setInterval(poll, 5000);
     return () => clearInterval(id);
-  }, []);
+  }, [connected]);
 
   return (
     <aside className="flex w-56 flex-col border-zinc-800 border-r bg-zinc-950">
@@ -93,20 +81,11 @@ export function Sidebar() {
         <div className="mt-6 px-2 font-semibold text-[10px] text-zinc-600 uppercase tracking-wider">
           Status
         </div>
-        <div className="mt-2 space-y-2 px-2">
-          <StatusBadge
-            label="Bright Data"
-            status={health.brightdata ? "connected" : "error"}
-          />
-          <StatusBadge
-            label="Cognee"
-            status={health.cognee ? "connected" : "degraded"}
-          />
-          <StatusBadge
-            label="Pipeline"
-            status={health.pipeline ? "connected" : "idle"}
-          />
-          <StatusBadge label="SSE" status={connected ? "connected" : "error"} />
+        <div className="mt-2 space-y-1.5 px-2">
+          <StatusBadge label="Bright Data" status={health.brightdata?.connected ? "connected" : "error"} detail={health.brightdata?.connected ? `${health.brightdata.tools} tools` : (health.brightdata?.error ?? "Not connected")} />
+          <StatusBadge label="Cognee" status={health.cognee?.connected ? "connected" : "degraded"} detail={health.cognee?.connected ? `${health.cognee.tools} tools` : (health.cognee?.error ?? "Docker required")} />
+          <StatusBadge label="Pipeline" status={health.pipeline?.connected ? "connected" : "idle"} />
+          <StatusBadge label="SSE" status={health.sse?.connected ? "connected" : "error"} />
         </div>
       </nav>
 
@@ -125,11 +104,11 @@ function UserSection() {
       {user && (
         <div className="mb-3 flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 font-bold text-[10px] text-zinc-300">
-            {user.name.charAt(0).toUpperCase()}
+            {(user.name ?? "U").charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-[11px] text-zinc-200">
-              {user.name}
+              {user.name ?? "Unknown"}
             </div>
             <div className="truncate text-[10px] text-zinc-600">
               {user.email}
@@ -166,9 +145,11 @@ function UserSection() {
 function StatusBadge({
   label,
   status,
+  detail,
 }: {
   label: string;
   status: "connected" | "degraded" | "idle" | "error";
+  detail?: string;
 }) {
   const colors = {
     connected: "bg-emerald-500",
@@ -181,6 +162,9 @@ function StatusBadge({
     <div className="flex items-center gap-2">
       <span className={`h-1.5 w-1.5 rounded-full ${colors[status]}`} />
       <span className="text-[11px] text-zinc-400">{label}</span>
+      {detail && (
+        <span className="ml-auto text-[9px] text-zinc-600 truncate max-w-[80px]">{detail}</span>
+      )}
     </div>
   );
 }

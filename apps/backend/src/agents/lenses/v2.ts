@@ -154,36 +154,40 @@ async function analyzeLens(
     lens
   );
 
-  // 3. Build prompt
+  // 3. Build prompt with raw scraped data
   const factsText = freshFacts
     .map(
       (f) =>
-        `- [${f.confidence.toFixed(2)}] ${f.claim} (${f.primaryLens}${f.secondaryLenses.length > 0 ? ", " + f.secondaryLenses.join(", ") : ""})`
+        `- [${f.confidence.toFixed(2)}] Source: ${f.sourceUrl}\n  Claim: ${f.claim}\n  Raw Data: ${(f.rawData ?? "").slice(0, 800)}`
     )
-    .join("\n");
+    .join("\n\n");
 
-  const prompt = `Analyze these facts about ${company} through the ${lens.toUpperCase()} lens:
+  const prompt = `You are the ${lens.toUpperCase()} Lens. Analyze the following scraped web data about ${company}. Use the RAW DATA (actual web content) for substantive analysis — don't just summarize the claim.
 
-Facts:
+SCRAPED WEB DATA FOR ${company.toUpperCase()}:
 ${factsText}
 
-${recalled ? `Prior context from memory:\n${recalled.slice(0, 2000)}\n\n` : ""}
-Produce:
-1. HEADLINE: One-line summary
-2. SYNTHESIS: 2-3 sentence analysis
-3. CONFIDENCE: 0.0-1.0 score
-4. SOURCES: List the source URLs
+${recalled ? `Prior intelligence memory:\n${recalled.slice(0, 1500)}\n\n` : ""}
 
-Format:
-HEADLINE: ...
-SYNTHESIS: ...
-CONFIDENCE: 0.XX
-SOURCES: url1, url2`;
+TASK:
+1. Analyze the raw web data for key facts, numbers, trends, and signals
+2. Cross-reference information across multiple sources when available
+3. Produce:
+
+HEADLINE: (one-line specific insight — include numbers if available)
+SYNTHESIS: (2-3 sentences with specifics from the data — cite figures, dates, names)
+CONFIDENCE: (0.0-1.0 based on data quality: structured extractor=0.8+, markdown scrape=0.6+, search snippet=0.5)
+SOURCES: url1, url2
+
+BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 15%, say 15%. Use the actual numbers from the raw data.`;
 
   // 4. LLM Analysis
   let headline = `${company} — ${lens.toUpperCase()} analysis`;
   let synthesis = `Analyzed ${facts.length} facts for ${company}.`;
-  let confidence = 0.7;
+  // Base confidence from fact quality, not hardcoded 0.7
+  let confidence = facts.length > 0
+    ? facts.reduce((sum, f) => sum + f.confidence, 0) / facts.length
+    : 0.5;
   const sourceUrls = [...new Set(facts.map((f) => f.sourceUrl))];
 
   try {

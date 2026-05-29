@@ -28,20 +28,20 @@ on("monitor_tick", async (event: MonitorTick) => {
   }
 
   const { runId, company } = event;
+  const query = `${company} stock price today market data`;
+  console.log(`[market-data-bot] Searching: "${query}"`);
   emitStep(
     runId,
     "market-data-bot",
     1,
     "Search",
-    `Searching market data for ${company}...`,
+    `Searching: "${query}"`,
     "running",
     20
   );
 
-  const search = await smartSearch(
-    `${company} stock price today market data`,
-    "price"
-  );
+  const search = await smartSearch(query, "price");
+  console.log(`[market-data-bot] Results: ${search.results.slice(0, 300)}`);
 
   emitStep(
     runId,
@@ -61,28 +61,20 @@ on("monitor_tick", async (event: MonitorTick) => {
       (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
     );
 
+  console.log(`[market-data-bot] Found ${urls.length} URLs: ${urls.join(", ")}`);
+
   let scrapedContent = search.results;
-  let scrapedUrl =
-    urls[0] ?? `https://finance.search?q=${encodeURIComponent(company)}`;
+  let scrapedUrl = urls[0] ?? `https://finance.search?q=${encodeURIComponent(company)}`;
+  let wasScraped = false;
 
   if (urls.length > 0) {
-    emitStep(
-      runId,
-      "market-data-bot",
-      3,
-      "Scrape",
-      `Scraping ${urls[0]} for ${company}...`,
-      "running",
-      70
-    );
-    const scrape = await smartScrape({
-      url: urls[0]!,
-      dataType: "price",
-      preferredMethod: "structured",
-    });
+    console.log(`[market-data-bot] Scraping: ${urls[0]}`);
+    emitStep(runId, "market-data-bot", 3, "Scrape", `Scraping ${urls[0]}`, "running", 70);
+    const scrape = await smartScrape({ url: urls[0]!, dataType: "price", preferredMethod: "structured" });
     scrapedContent = scrape.content;
     scrapedUrl = urls[0]!;
-
+    wasScraped = !scrape.fromCache;
+    console.log(`[market-data-bot] Scraped ${scrapedContent.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`);
     if (scrape.fromCache) {
       const stale = checkStaleness(
         {
@@ -125,7 +117,13 @@ on("monitor_tick", async (event: MonitorTick) => {
     company,
     dataType: "price",
     sourceUrl: scrapedUrl,
-    receipt: search.receipt,
+    receipt: {
+      raw: scrapedContent,
+      method: wasScraped ? "scrape" : search.fromCache ? "cache" : "search",
+      costTier: wasScraped ? 1 : 0,
+      durationMs: 0,
+      url: scrapedUrl,
+    },
     scrapedAt: new Date().toISOString(),
     fromCache: search.fromCache,
   };
@@ -195,9 +193,9 @@ on("monitor_tick", async (event: MonitorTick) => {
       60
     );
     const scrape = await smartScrape({ url: urls[0]!, dataType: "news" });
-    detail = scrape.content.slice(0, 4000);
+    detail = scrape.content;
     scrapedUrl = urls[0]!;
-
+    console.log(`[news-data-bot] Scraped ${detail.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`);
     if (scrape.fromCache) {
       const stale = checkStaleness(
         {
@@ -240,7 +238,13 @@ on("monitor_tick", async (event: MonitorTick) => {
     company,
     dataType: "news",
     sourceUrl: scrapedUrl,
-    receipt: search.receipt,
+    receipt: {
+      raw: detail,
+      method: "scrape",
+      costTier: 1,
+      durationMs: 0,
+      url: scrapedUrl,
+    },
     scrapedAt: new Date().toISOString(),
     fromCache: search.fromCache,
   };

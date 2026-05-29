@@ -138,3 +138,54 @@ body {
     opacity: 0.3;
   }
 }
+
+@keyframes argus-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes argus-active {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 168, 83, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(212, 168, 83, 0); }
+}
+
+@keyframes argus-bar-active {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes argus-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+@keyframes argus-tile-bump {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.argus-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(212, 168, 83, 0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: argus-shimmer 2s ease-in-out infinite;
+}
+
+.argus-bar-active {
+  background: linear-gradient(90deg, #d4a853, #fbbf24, #d4a853);
+  background-size: 200% 100%;
+  animation: argus-bar-active 2s ease infinite;
+}
+
+.argus-active {
+  animation: argus-active 1.5s ease-in-out infinite;
+}
+
+.argus-pulse {
+  animation: argus-pulse 2s ease-in-out infinite;
+}
+
+.argus-tile-bump {
+  animation: argus-tile-bump 0.6s ease-out;
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { Signal } from "@/lib/api.ts";
 
 interface LensGridProps {
@@ -65,6 +66,8 @@ function LensColumn({
   bg: string;
   signals: Signal[];
 }) {
+  const router = useRouter();
+
   return (
     <div className="relative flex flex-col gap-3 border-border-subtle border-r p-5 transition-colors last:border-r-0 hover:bg-white/[0.015]">
       <div className="flex items-center justify-between border-border-subtle border-b pb-2">
@@ -85,6 +88,7 @@ function LensColumn({
           <li
             className="group relative cursor-pointer overflow-hidden border-border-subtle border-b px-4 py-3 transition-all hover:translate-x-0.5 hover:bg-white/[0.02]"
             key={s.id}
+            onClick={() => router.push("/signals")}
           >
             <div
               className="absolute top-3 bottom-3 left-0 w-[3px] rounded-r-sm opacity-80 transition-all group-hover:w-1 group-hover:opacity-100"
@@ -120,9 +124,13 @@ function LensColumn({
       </ul>
 
       <div className="mt-auto flex items-center justify-between border-border-subtle border-t pt-3">
-        <span className="cursor-pointer text-[10px] text-text-muted tracking-wide transition-colors hover:text-text-primary">
+        <button
+          type="button"
+          onClick={() => router.push("/reports")}
+          className="cursor-pointer text-[10px] text-text-muted tracking-wide transition-colors hover:text-text-primary"
+        >
           Open {title.split(" ")[0]} Brief
-        </span>
+        </button>
         <MiniSpark color={color} />
       </div>
     </div>

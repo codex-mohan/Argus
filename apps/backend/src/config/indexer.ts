@@ -96,21 +96,34 @@ export async function indexModels(apiKey?: string): Promise<{
       return {
         success: false,
         count: 0,
-        error: `HTTP ${response.status}: ${text.slice(0, 200)}`,
+        error: `HTTP ${response.status}: ${text.slice(0, 300)}`,
       };
     }
 
-    const data = (await response.json()) as {
-      data?: AimlApiModel[];
-      object?: string;
-    };
-    const models = data.data ?? [];
-
-    if (!Array.isArray(models) || models.length === 0) {
-      return { success: false, count: 0, error: "No models returned from API" };
+    const raw = (await response.json()) as Record<string, unknown>;
+    // Some providers return { data: [...] }, others return { models: [...] }, others return the array directly
+    let models: AimlApiModel[] = [];
+    if (Array.isArray(raw.data)) {
+      models = raw.data as AimlApiModel[];
+    } else if (Array.isArray(raw.models)) {
+      models = raw.models as AimlApiModel[];
+    } else if (Array.isArray(raw)) {
+      models = raw as unknown as AimlApiModel[];
     }
 
-    clearModelCatalog();
+    if (models.length === 0) {
+      return { success: false, count: 0, error: `API returned 0 models. Response keys: ${Object.keys(raw).join(", ")}` };
+    }
+
+    console.log(`[indexer] Fetched ${models.length} models from AI/ML API`);
+
+    // Log which providers exist in the response
+    const providers = new Set<string>();
+    for (const m of models) {
+      providers.add(m.owned_by ?? m.id.split("/")[0] ?? "unknown");
+    }
+    console.log(`[indexer] Available providers: ${[...providers].sort().join(", ")}`);
+    console.log(`[indexer] Sample model IDs: ${models.slice(0, 5).map((m) => m.id).join(", ")}`);
 
     const entries: ModelEntry[] = models.map((m) => ({
       modelId: normalizeModelId(m.id),
@@ -126,6 +139,8 @@ export async function indexModels(apiKey?: string): Promise<{
     }));
 
     storeModels(entries);
+
+    console.log(`[indexer] Stored ${entries.length} models in catalog`);
 
     return { success: true, count: entries.length };
   } catch (err) {

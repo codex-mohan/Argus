@@ -197,6 +197,25 @@ async function handleRemoveWatchlist(req: Request): Promise<Response> {
   }
 }
 
+async function handleUpdateWatchlist(req: Request): Promise<Response> {
+  const token = extractToken(req);
+  if (!token) {
+    return jsonResponse({ success: false, error: "Not authenticated" }, 401);
+  }
+  const user = await getCurrentUser(token);
+  if (!user) {
+    return jsonResponse({ success: false, error: "Invalid token" }, 401);
+  }
+  try {
+    const body = (await req.json()) as { companies?: string[] };
+    const companies = body.companies ?? [];
+    updateUserWatchlist(user.id, companies);
+    return jsonResponse({ success: true, companies });
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+}
+
 async function handleTriggerRun(req: Request): Promise<Response> {
   try {
     const body = (await req.json()) as { company?: string; mode?: string };
@@ -230,9 +249,9 @@ async function handleReplay(req: Request): Promise<Response> {
 
 // ─── MCP State (updated async) ───────────────────────────────────────────
 
-let mcpState = {
-  brightdata: { connected: false, tools: 0 },
-  cognee: { connected: false, tools: 0 },
+let mcpState: Record<string, { connected: boolean; tools: number; toolNames: string[]; error: string | null }> = {
+  brightdata: { connected: false, tools: 0, toolNames: [], error: null },
+  cognee: { connected: false, tools: 0, toolNames: [], error: null },
 };
 
 async function connectMcpServersAsync(): Promise<void> {
@@ -240,58 +259,47 @@ async function connectMcpServersAsync(): Promise<void> {
   const cogneeUrl = process.env.COGNEE_MCP_URL ?? "http://localhost:8000";
 
   const mcpServers: McpServerConfig[] = [];
+  const errors: Record<string, string | null> = { brightdata: null, cognee: null };
+  const toolNames: Record<string, string[]> = { brightdata: [], cognee: [] };
+  let brightDataTools = 0;
+  let cogneeTools = 0;
 
   if (brightDataKey) {
-    mcpServers.push({
-      name: "brightdata",
-      url: `https://mcp.brightdata.com/mcp?token=${brightDataKey}`,
-    });
-    console.log("  Bright Data: configured");
+    mcpServers.push({ name: "brightdata", url: `https://mcp.brightdata.com/mcp?token=${brightDataKey}` });
+    console.log("  Bright Data MCP: configured");
   } else {
-    console.warn("  ✗ BRIGHTDATA_API_KEY not set — Bright Data MCP disabled");
+    errors.brightdata = "BRIGHTDATA_API_KEY not set in .env";
+    console.warn("  Bright Data MCP: ✗ key not set — scraping disabled");
   }
 
   mcpServers.push({ name: "cognee", url: cogneeUrl });
-  console.log("  Cognee: configured");
-
-  let brightDataTools = 0;
-  let cogneeTools = 0;
+  console.log(`  Cognee MCP: attempting ${cogneeUrl}`);
 
   for (const cfg of mcpServers) {
     try {
       const tools = await connectMcpServer(cfg);
-      if (cfg.name === "brightdata") {
-        brightDataTools = tools.length;
-      }
-      if (cfg.name === "cognee") {
-        cogneeTools = tools.length;
-      }
+      const names = tools.map((t) => t.name);
+      if (cfg.name === "brightdata") { brightDataTools = tools.length; toolNames.brightdata = names; }
+      if (cfg.name === "cognee") { cogneeTools = tools.length; toolNames.cognee = names; }
+      console.log(`  ${cfg.name}: ✓ ${tools.length} tools (${names.slice(0, 5).join(", ")}${names.length > 5 ? ` +${names.length - 5} more` : ""})`);
     } catch (err) {
-      console.error(
-        `  ✗ ${cfg.name}: connection failed — ${err instanceof Error ? err.message : String(err)}`
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      errors[cfg.name] = msg;
+      console.error(`  ${cfg.name}: ✗ connection failed — ${msg}`);
     }
   }
 
   mcpState = {
-    brightdata: { connected: brightDataTools > 0, tools: brightDataTools },
-    cognee: { connected: cogneeTools > 0, tools: cogneeTools },
+    brightdata: { connected: brightDataTools > 0, tools: brightDataTools, toolNames: toolNames.brightdata, error: errors.brightdata },
+    cognee: { connected: cogneeTools > 0, tools: cogneeTools, toolNames: toolNames.cognee, error: errors.cognee },
   };
 
-  console.log(
-    `  Bright Data: ${brightDataTools > 0 ? `✓ ${brightDataTools} tools` : "✗ unavailable"}`
-  );
-  console.log(
-    `  Cognee:      ${cogneeTools > 0 ? `✓ ${cogneeTools} tools` : "✗ unavailable"}`
-  );
-
-  // Start pipeline if MCP is ready
-  if (brightDataTools > 0 || cogneeTools > 0) {
+  // Start pipeline only if Bright Data is connected
+  if (brightDataTools > 0) {
     startPipeline(5);
+    console.log("  Pipeline: ✓ started (5-min interval)");
   } else {
-    console.warn(
-      "  ⚠ Pipeline not started — MCP servers unavailable. Replay mode still works."
-    );
+    console.warn("  Pipeline: ✗ not started — Bright Data MCP unavailable");
   }
 }
 
@@ -406,42 +414,78 @@ async function handleChat(req: Request): Promise<Response> {
       })
       .slice(0, 10);
 
-    // Build context for LLM
+    // Build signal context
     const signalContext = relevantSignals
       .map(
         (s) =>
-          `[${s.lens.toUpperCase()}] ${s.headline} (confidence: ${(s.confidence * 100).toFixed(0)}%) — ${s.synthesis}`
+          `[${s.lens.toUpperCase()}] ${s.headline} (confidence: ${(s.confidence * 100).toFixed(0)}%) -- ${s.synthesis}`
       )
       .join("\n");
 
-    const briefContext = companyBriefs
-      .map(
-        (b) => `Brief for ${b.company}: ${b.headline} — Risk ${b.riskScore}/100`
-      )
-      .join("\n");
+    // Include full brief details for context
+    const briefDetails = companyBriefs
+      .map((b) => {
+        const findings = (b.keyFindings && Array.isArray(b.keyFindings) ? b.keyFindings : []).join("; ");
+        const rec = b.recommendation ?? "No recommendation";
+        return `### ${b.company}\n**${b.headline}**\nRisk: ${b.riskScore}/100\nSummary: ${b.summary?.slice(0, 300) ?? "No summary"}\nKey Findings: ${findings}\nRecommendation: ${rec}`;
+      })
+      .join("\n\n");
 
-    const systemPrompt = `You are the Argus Intelligence Assistant. You help analysts query cross-lens intelligence (GTM, Finance, Security) from a live enterprise monitoring platform.
+    const systemPrompt = `You are the Argus Intelligence Assistant. You synthesize cross-lens intelligence (GTM, Finance, Security) from a live enterprise monitoring platform.
 
 Current watchlist: ${watchlistCompanies.join(", ")}
 
-Relevant signals from the platform:
+Recent signals from the platform:
 ${signalContext || "No signals available yet."}
 
-Recent briefs:
-${briefContext || "No briefs available yet."}
+Available intelligence briefs:
+${briefDetails || "No briefs available yet. Suggest triggering a pipeline scan."}
 
-Instructions:
-- Always cite which lens (GTM, Finance, Security) each insight comes from
-- If generating a report, structure it with: Executive Summary, Key Findings (per lens), Risk Assessment, Recommendations
-- Be concise but thorough. Use markdown formatting.
-- If you don't have enough data, say so and suggest running a pipeline scan.`;
+INSTRUCTIONS:
+- When asked to "generate a report" on a company, produce a structured intelligence report with these sections using markdown:
+
+# ${watchlistCompanies[0] ?? "Company"} Intelligence Report
+
+## Executive Summary
+(2-3 sentences synthesizing the key takeaway across all lenses)
+
+## Key Signals by Lens
+### GTM Lens (Competitive Intelligence)
+- (specific signals with confidence scores and source URLs)
+
+### Finance Lens (Market & Alpha Intelligence)
+- (specific signals with confidence scores and source URLs)
+
+### Security Lens (Risk & Compliance Intelligence)
+- (specific signals with confidence scores and source URLs)
+
+## Cross-Lens Correlation
+- How do these signals connect? Any contradictions?
+
+## Risk Assessment
+- Composite risk score: X/100
+- Rationale
+
+## Recommendations
+- 3-5 actionable next steps
+
+- Always cite which lens each finding comes from
+- Include confidence percentages
+- If data is thin, be honest and suggest running a pipeline scan
+- Use the actual data from the signals and briefs above — never fabricate
+- Be concise but thorough. Maximum 1500 words.`;
 
     const apiKey = process.env.AIMLAPI_KEY;
     if (!apiKey) {
-      // Fallback: return structured data without LLM synthesis
       return jsonResponse({
         success: true,
-        response: `Here's what I found in your intelligence database:\n\n${signalContext}\n\n${briefContext}\n\n(Note: LLM synthesis is unavailable — set AIMLAPI_KEY in .env for full analysis)`,
+        response: `## Intelligence Assistant (Offline Mode)
+
+Set AIMLAPI_KEY in .env for full AI-powered analysis.
+
+### Recent Signals\n${signalContext || "No signals available yet."}
+
+### Available Briefs\n${briefDetails || "No briefs available yet. Run a pipeline scan first."}`,
         sources: relevantSignals.map((s) => ({
           headline: s.headline,
           lens: s.lens,
@@ -573,6 +617,11 @@ async function main() {
             credits: creditStats,
             cache: cacheStats,
           },
+          requirements: {
+            brightdata: !!process.env.BRIGHTDATA_API_KEY,
+            aimlapi: !!process.env.AIMLAPI_KEY,
+            cogneeDocker: "docker-compose up -d cognee (http://localhost:8000)",
+          },
         });
       },
 
@@ -690,6 +739,8 @@ async function main() {
           return handleAddWatchlist(req);
         case "DELETE /api/watchlist":
           return handleRemoveWatchlist(req);
+        case "PUT /api/watchlist":
+          return handleUpdateWatchlist(req);
         case "POST /api/run":
           return handleTriggerRun(req);
         case "POST /api/replay":

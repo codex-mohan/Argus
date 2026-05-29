@@ -159,68 +159,117 @@ function classifyFact(
 
 on("evidence_collected", async (event: EvidenceCollected) => {
   const { runId, agentId, company, dataType, sourceUrl, receipt } = event;
-
-  emitStep(
-    runId,
-    "normalizer",
-    1,
-    "Extract",
-    `Extracting facts from ${agentId} evidence...`,
-    "running",
-    30
-  );
-
   const rawText = receipt.raw;
+
+  emitStep(runId, "normalizer", 1, "Extract", `Extracting facts from ${agentId} (${rawText.length} chars)...`, "running", 30);
+  console.log(`[normalizer] ${agentId} evidence: ${dataType}, ${rawText.length} chars`);
+
   const facts: FactExtracted[] = [];
 
-  // Apply extraction rules
-  for (const rule of EXTRACTION_RULES) {
-    const matches = rawText.match(rule.pattern);
-    if (matches) {
-      let claim = rule.claimTemplate;
-      for (let i = 0; i < matches.length; i++) {
-        claim = claim.replace(`{match${i}}`, matches[i] ?? "");
+  // ─── Primary: LLM-based fact extraction ──────────────────────────────
+  const apiKey = process.env.AIMLAPI_KEY;
+  if (apiKey && rawText.length > 50) {
+    try {
+      const { default: OpenAI } = await import("openai");
+      const client = new OpenAI({ apiKey, baseURL: "https://api.aimlapi.com/v1" });
+
+      const llmPrompt = `Extract specific, quantitative facts from this scraped web content about ${company}. Do NOT summarize or speculate. Extract ONLY what is explicitly stated.
+
+For each fact, provide:
+- WHAT: A specific, factual claim (include numbers, dates, names, amounts if present)
+- CONFIDENCE: 0.0-1.0 based on how clearly the source states this (structured data=0.9, article text=0.7, search snippet=0.5)
+- LENS: gtm (competitor moves, hiring, product launches, buying intent), finance (price, revenue, earnings, filings, guidance), or security (regulatory, lawsuits, supplier risk, breaches)
+
+SOURCE URL: ${sourceUrl}
+DATA TYPE: ${dataType}
+
+SCRAPED CONTENT:
+${rawText.slice(0, 8000)}
+
+Format each fact as JSON objects in a JSON array:
+[{"claim": "...", "confidence": 0.X, "lens": "gtm|finance|security"}]`;
+
+      const completion = await client.chat.completions.create({
+        model: "deepseek-v4-flash",
+        messages: [{ role: "user", content: llmPrompt }],
+        temperature: 0.1,
+        max_completion_tokens: 4096,
+      });
+
+      const response = completion.choices[0]?.message?.content ?? "";
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]) as Array<{ claim: string; confidence: number; lens: string }>;
+          for (const item of parsed) {
+            if (item.claim && item.confidence && item.lens) {
+              facts.push({
+                type: "fact_extracted",
+                runId,
+                factId: generateId(),
+                company,
+                claim: item.claim,
+                sourceUrl,
+                scrapedAt: event.scrapedAt,
+                confidence: Math.min(1, Math.max(0, item.confidence)),
+                evidence: receipt,
+                rawData: rawText.slice(0, 3000),
+              });
+            }
+          }
+          console.log(`[normalizer] LLM extracted ${facts.length} facts from ${rawText.length} chars`);
+        } catch { /* JSON parse failed */ }
       }
+    } catch (err) {
+      console.log(`[normalizer] LLM extraction failed: ${err instanceof Error ? err.message : String(err)}, falling back to regex`);
+    }
+  }
+
+  // ─── Fallback: regex-based extraction ─────────────────────────────────
+  if (facts.length === 0 && rawText.length > 50) {
+    for (const rule of EXTRACTION_RULES) {
+      const matches = rawText.match(rule.pattern);
+      if (matches) {
+        let claim = rule.claimTemplate;
+        for (let i = 0; i < matches.length; i++) {
+          claim = claim.replace(`{match${i}}`, matches[i] ?? "");
+        }
+        facts.push({
+          type: "fact_extracted",
+          runId,
+          factId: generateId(),
+          company,
+          claim,
+          sourceUrl,
+          scrapedAt: event.scrapedAt,
+          confidence: rule.confidence,
+          evidence: receipt,
+          rawData: rawText.slice(0, 3000),
+        });
+      }
+    }
+
+    // If still no facts, create a generic one
+    if (facts.length === 0) {
       facts.push({
         type: "fact_extracted",
         runId,
         factId: generateId(),
         company,
-        claim,
+        claim: `${company}: ${rawText.slice(0, 300)}`,
         sourceUrl,
         scrapedAt: event.scrapedAt,
-        confidence: rule.confidence,
+        confidence: 0.4,
         evidence: receipt,
-        rawData: rawText.slice(0, 1000),
+        rawData: rawText.slice(0, 3000),
       });
+      console.log(`[normalizer] No facts extracted — created generic fallback`);
     }
   }
 
-  // If no rules matched, create a low-confidence generic fact
-  if (facts.length === 0 && rawText.length > 50) {
-    facts.push({
-      type: "fact_extracted",
-      runId,
-      factId: generateId(),
-      company,
-      claim: `${company}: ${rawText.slice(0, 120)}...`,
-      sourceUrl,
-      scrapedAt: event.scrapedAt,
-      confidence: 0.5,
-      evidence: receipt,
-      rawData: rawText.slice(0, 1000),
-    });
-  }
+  console.log(`[normalizer] Extracted ${facts.length} facts (${dataType})`);
 
-  emitStep(
-    runId,
-    "normalizer",
-    2,
-    "Classify",
-    `Classifying ${facts.length} facts for ${company}...`,
-    "running",
-    70
-  );
+  emitStep(runId, "normalizer", 2, "Classify", `Classifying ${facts.length} facts for ${company}...`, "running", 70);
 
   // Classify each fact
   for (const fact of facts) {
@@ -237,20 +286,13 @@ on("evidence_collected", async (event: EvidenceCollected) => {
       secondaryLenses: classification.secondary,
       confidence: fact.confidence,
       reasoning: classification.reasoning,
+      rawData: fact.rawData,
     };
 
     emit(classified);
   }
 
-  emitStep(
-    runId,
-    "normalizer",
-    3,
-    "Complete",
-    `Normalized ${facts.length} facts for ${company}`,
-    "success",
-    100
-  );
+  emitStep(runId, "normalizer", 3, "Complete", `Normalized ${facts.length} facts for ${company}`, "success", 100);
 });
 
 console.log("[agents/normalizer] Normalizer + Classifier registered");

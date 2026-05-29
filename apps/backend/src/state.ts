@@ -256,6 +256,17 @@ export function persistBrief(
   company: string,
   brief: IntelligenceBrief
 ): void {
+  // Dedup: skip if a brief with the same company + headline already exists in the last hour
+  const existing = db
+    .query(
+      "SELECT id FROM briefs WHERE company = ? AND headline = ? AND generated_at > datetime('now', '-1 hour')"
+    )
+    .get(company, brief.executive_summary.slice(0, 100)) as { id: number } | null;
+
+  if (existing) {
+    return;
+  }
+
   db.run(
     `INSERT INTO briefs (run_id, company, headline, summary, key_findings, risk_score, recommendation, sources, generated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -267,7 +278,7 @@ export function persistBrief(
       JSON.stringify(brief.key_signals.map((s) => s.headline)),
       brief.risk_score,
       brief.recommendation,
-      JSON.stringify(brief.correlation_notes.map((c) => c.relationship)),
+      JSON.stringify(brief.sources.slice(0, 10)),
       brief.generated_at,
     ]
   );
@@ -278,6 +289,10 @@ export function getBriefsForCompany(company: string): Array<{
   headline: string;
   riskScore: number;
   generatedAt: string;
+  summary: string;
+  keyFindings: string[];
+  recommendation: string;
+  sources: string[];
 }> {
   const rows = db
     .query("SELECT * FROM briefs WHERE company = ? ORDER BY generated_at DESC")
@@ -288,6 +303,10 @@ export function getBriefsForCompany(company: string): Array<{
     headline: String(r.headline),
     riskScore: Number(r.risk_score),
     generatedAt: String(r.generated_at),
+    summary: String(r.summary ?? ""),
+    keyFindings: JSON.parse(String(r.key_findings ?? "[]")),
+    recommendation: String(r.recommendation ?? ""),
+    sources: JSON.parse(String(r.sources ?? "[]")),
   }));
 }
 

@@ -75,19 +75,23 @@ on("convergence_detected", async (event: ConvergenceDetected) => {
       ? `\n\nCONTRADICTIONS DETECTED:\n${contradictions.map((c: Contradiction) => `- ${c.lensA} vs ${c.lensB}: ${c.description} (${c.severity})`).join("\n")}`
       : "";
 
-  const prompt = `Write an executive intelligence brief for ${company}.
+  const prompt = `Write a substantive executive intelligence brief for ${company}. Use specific numbers, names, dates, and figures from the signal data below. Do NOT be vague.
 
-CORRELATED SIGNALS:\n${signalsText}${contradictionText}
+CORRELATED SIGNALS:
+${signalsText}${contradictionText}
 
 COMPOSITE SCORE: ${compositeScore}/100
 
-Format:
-HEADLINE: ...
-SUMMARY: ...
+REQUIRED SECTIONS:
+HEADLINE: One impactful line with a specific number or finding (e.g., "TSMC Q2 Guidance Cut by $2.4B as AI Demand Softens")
+SUMMARY: 2-3 paragraphs with specific data points from the signals. Cite which lens provided each finding. Include confidence levels.
 KEY_FINDINGS:
-- ...
-RISK_SCORE: 0-100
-RECOMMENDATION: ...`;
+- At least 3 bullets, each with a specific data point and the lens that found it
+RISK_SCORE: 0-100 (use the composite score as baseline, adjust if contradictions are severe)
+RECOMMENDATION: 2-3 specific, actionable next steps based on the data
+SOURCES: List all source URLs cited
+
+BE SPECIFIC. If a signal mentions a price of $942, say $942. If hiring increased 15%, say 15%. If a filing date is mentioned, state it. Every claim must cite a source URL.`;
 
   let headline = `${company} Intelligence Brief`;
   let summary = `Multiple intelligence lenses have converged on signals for ${company}.`;

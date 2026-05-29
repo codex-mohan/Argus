@@ -57,6 +57,7 @@ export interface FactClassified {
   confidence: number;
   factId: string;
   primaryLens: "gtm" | "finance" | "security";
+  rawData: string;
   reasoning: string;
   runId: string;
   secondaryLenses: Array<"gtm" | "finance" | "security">;
@@ -438,6 +439,7 @@ export const REPLAY_SCENARIOS: Record<
         confidence: 0.9,
         reasoning:
           "Price movement is a primary finance signal; stock decline also indicates vendor stability concerns for security lens.",
+        rawData: "NVIDIA stock price dropped 5.2% to $112.34 amid broader semiconductor sell-off.",
       },
       {
         type: "fact_classified",
@@ -453,6 +455,7 @@ export const REPLAY_SCENARIOS: Record<
         confidence: 0.85,
         reasoning:
           "Guidance cut is finance-primary; creates competitor opportunity (GTM) and reveals supply chain vulnerability (security).",
+        rawData: "NVIDIA cuts Q2 revenue guidance by $2B citing Blackwell supply constraints from TSMC delays.",
       },
       {
         type: "fact_classified",

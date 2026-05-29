@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { Signal } from "@/lib/api.ts";
 
 interface ConvergenceCardProps {
@@ -64,6 +65,7 @@ function tagClass(tag: string): string {
 }
 
 export default function ConvergenceCard({ signals }: ConvergenceCardProps) {
+  const router = useRouter();
   const convergence = findConvergence(signals);
 
   return (
@@ -80,7 +82,7 @@ export default function ConvergenceCard({ signals }: ConvergenceCardProps) {
         </div>
         <div className="text-right font-mono text-[10px] text-text-muted">
           <div className="font-bold font-display text-lg text-truth">
-            {convergence ? `${Math.round(convergence.confidence * 100)}%` : "—"}
+            {convergence ? `${Math.round(convergence.confidence * 100)}%` : "--"}
           </div>
           <div>confidence</div>
         </div>
@@ -89,7 +91,7 @@ export default function ConvergenceCard({ signals }: ConvergenceCardProps) {
         {convergence?.synthesis ??
           "Agents are actively collecting and analyzing data. The correlation engine will surface convergent signals as they appear across multiple lenses."}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {convergence ? (
           convergence.tags.map((tag) => (
             <span
@@ -103,6 +105,15 @@ export default function ConvergenceCard({ signals }: ConvergenceCardProps) {
           <span className="rounded border border-border-medium bg-surface px-2 py-0.5 font-mono text-[10px] text-text-muted">
             Collecting...
           </span>
+        )}
+        {convergence && (
+          <button
+            type="button"
+            onClick={() => router.push("/reports")}
+            className="ml-auto rounded border border-zinc-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+          >
+            View Full Reports
+          </button>
         )}
       </div>
     </section>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context.tsx";
+import { TagInput } from "@/components/tag-input.tsx";
 
 const STEPS = [
   {
@@ -17,14 +17,13 @@ const STEPS = [
 
 export default function OnboardingPage() {
   const { user, updateUser } = useAuth();
-  const router = useRouter();
   const [step, setStep] = useState(user?.onboardingStep ?? 0);
-  const [watchlistInput, setWatchlistInput] = useState("");
+  const [watchlistItems, setWatchlistItems] = useState<string[]>(user?.watchlist ?? []);
   const [saving, setSaving] = useState(false);
 
   // If onboarding is already complete, redirect
   if (user?.onboardingComplete) {
-    router.replace("/dashboard");
+    window.location.href = "/dashboard";
     return null;
   }
 
@@ -32,10 +31,6 @@ export default function OnboardingPage() {
     setSaving(true);
     try {
       const token = localStorage.getItem("argus_token");
-      const watchlist = watchlistInput
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
       const res = await fetch("/api/auth/onboarding", {
         method: "PUT",
         headers: {
@@ -45,7 +40,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           step: newStep,
           complete,
-          watchlist: watchlist.length > 0 ? watchlist : undefined,
+          watchlist: watchlistItems.length > 0 ? watchlistItems : undefined,
         }),
       });
       const data = await res.json();
@@ -61,7 +56,7 @@ export default function OnboardingPage() {
     const nextStep = step + 1;
     if (nextStep >= STEPS.length - 1) {
       await saveStep(nextStep, true);
-      router.replace("/dashboard");
+      window.location.href = "/dashboard";
     } else {
       await saveStep(nextStep, false);
       setStep(nextStep);
@@ -131,8 +126,8 @@ export default function OnboardingPage() {
           {step === 1 && <ConnectStep />}
           {step === 2 && (
             <WatchlistStep
-              onChange={setWatchlistInput}
-              value={watchlistInput}
+              tags={watchlistItems}
+              onChange={setWatchlistItems}
             />
           )}
           {step === 3 && <CompleteStep />}
@@ -261,11 +256,11 @@ function ConnectStep() {
 }
 
 function WatchlistStep({
-  value,
+  tags,
   onChange,
 }: {
-  value: string;
-  onChange: (v: string) => void;
+  tags: string[];
+  onChange: (tags: string[]) => void;
 }) {
   return (
     <div>
@@ -273,22 +268,15 @@ function WatchlistStep({
         Configure Watchlist
       </h2>
       <p className="mb-4 text-sm text-zinc-400">
-        Enter the companies you want to monitor. Separate multiple companies
-        with commas.
+        Add the companies you want to monitor. Press Enter after each one or paste comma-separated values.
       </p>
-      <textarea
-        className="w-full resize-none rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600"
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g. NVIDIA, AMD, Tesla, Apple..."
-        rows={4}
-        value={value}
-      />
+      <TagInput tags={tags} onChange={onChange} placeholder="Type company name and press Enter..." />
       <p className="mt-2 text-[10px] text-zinc-600">
-        Tip: Add 3–5 companies to start. You can always expand your watchlist
-        later.
+        Tip: Add 3-5 companies to start. You can always expand your watchlist from the dashboard.
       </p>
     </div>
   );
+
 }
 
 function CompleteStep() {
