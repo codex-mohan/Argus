@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/backend/Dockerfile
     container_name: argus-backend
     ports:
       - "3001:3001"
@@ -11,28 +11,29 @@ services:
       AIMLAPI_KEY: "${AIMLAPI_KEY}"
       OPENAI_BASE_URL: "https://api.aimlapi.com/v1"
       OPENAI_API_KEY: "${AIMLAPI_KEY}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       COGNEE_MCP_URL: "http://cognee-mcp:8000"
-      SPEECHMATICS_API_KEY: "${SPEECHMATICS_API_KEY:-}"
-      TRIGGERWARE_KEY: "${TRIGGERWARE_KEY:-}"
+      PORT: "3001"
     depends_on:
-      - cognee-mcp
+      cognee-mcp:
+        condition: service_started
     networks:
       - argus_internal
+    restart: unless-stopped
 
   frontend:
     build:
-      context: ./apps/frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/frontend/Dockerfile
     container_name: argus-frontend
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+      NEXT_PUBLIC_API_URL: "http://backend:3001"
     depends_on:
       - backend
     networks:
       - argus_internal
+    restart: unless-stopped
 
   cognee-mcp:
     image: cognee/cognee-mcp:main
@@ -44,10 +45,12 @@ services:
       LLM_API_KEY: "${AIMLAPI_KEY}"
       LLM_PROVIDER: "openai"
       LLM_MODEL: "gpt-4o-mini"
+      API_URL: "http://localhost:8000"
     volumes:
       - cognee_data:/app/data
     networks:
       - argus_internal
+    restart: unless-stopped
 
 volumes:
   cognee_data:

@@ -60,14 +60,42 @@ export const ProviderStatus = z.object({
 });
 export type ProviderStatus = z.infer<typeof ProviderStatus>;
 
-// ---------------------------------------------------------------------------
-// Signal — what an agent produces after analysis
-// ---------------------------------------------------------------------------
-export const SignalSeverity = z.enum(["low", "medium", "high", "critical"]);
-export type SignalSeverity = z.infer<typeof SignalSeverity>;
+export const AgentStepStatus = z.enum(["pending", "running", "success", "failed", "skipped"]);
+export type AgentStepStatus = z.infer<typeof AgentStepStatus>;
 
 export const SignalLens = z.enum(["gtm", "finance", "security"]);
 export type SignalLens = z.infer<typeof SignalLens>;
+
+export const SignalSeverity = z.enum(["low", "medium", "high", "critical"]);
+export type SignalSeverity = z.infer<typeof SignalSeverity>;
+
+export const AgentStep = z.object({
+  id: z.string(),
+  agent: z.string(),
+  step: z.number().min(1).max(20),
+  label: z.string(),
+  detail: z.string(),
+  status: AgentStepStatus,
+  progress: z.number().min(0).max(100).default(0),
+  timestamp: z.string().datetime(),
+  lens: SignalLens.optional(),
+});
+export type AgentStep = z.infer<typeof AgentStep>;
+
+export const SignalDimension = z.object({
+  name: z.string(),
+  score: z.number().min(0).max(100),
+  description: z.string(),
+});
+export type SignalDimension = z.infer<typeof SignalDimension>;
+
+export const SignalAnalysis = z.object({
+  signal_id: z.string(),
+  composite_score: z.number().min(0).max(100),
+  verdict: z.enum(["approve", "flag", "block"]),
+  dimensions: z.array(SignalDimension),
+});
+export type SignalAnalysis = z.infer<typeof SignalAnalysis>;
 
 export const Signal = z.object({
   id: z.string(),
