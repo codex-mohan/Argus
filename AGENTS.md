@@ -267,6 +267,43 @@ if (result.status === "unavailable") {
 - **Docker networking**: Cognee MCP container can't reach host. Fix: use `host.docker.internal` in API_URL, or Docker bridge IP on Linux
 
 
+### Auth & Sessions
+
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| Password hashing | **Argon2id** via `hash-wasm` | Resistant to GPU/ASIC attacks, memory-hard, recommended by OWASP over bcrypt for new systems |
+| JWT signing | **jose** (Web Crypto API) | Zero native deps, works in Bun/Node/Edge, Ed25519 and HS256 support |
+| Sessions | Stateless JWT in `Authorization: Bearer` header + `argus_session` cookie fallback | No server-side session store needed; SQLite users table persists onboarding state |
+| Token expiry | 7 days | Long enough for daily-use dashboard, short enough to limit breach window |
+
+#### Why Argon2id over bcrypt
+
+OWASP Password Storage Cheat Sheet (2023) recommends **Argon2id** as the primary choice for password hashing. Unlike bcrypt (which is sequential and memory-light), Argon2id is memory-hard and resistant to both side-channel and GPU-cracking attacks. We use `hash-wasm` (pure WebAssembly) for Bun compatibility without node-gyp native modules.
+
+```typescript
+const hash = await argon2id({
+  password,
+  salt,
+  parallelism: 4,
+  iterations: 3,
+  memorySize: 65536,  // 64 MB
+  hashLength: 32,
+  outputType: "encoded",
+});
+```
+
+#### Password Policy
+- Minimum 8 characters
+- No complexity rules (NIST 800-63B: length > complexity)
+- Rate-limit registration/login per IP (future: Spectra CompositeRateLimiter)
+
+#### Onboarding State
+- Stored in `users` SQLite table: `onboarding_complete`, `onboarding_step`
+- Step 0: Account created
+- Step 1: Connect data sources (Bright Data, Cognee)
+- Step 2: Configure watchlist
+- Step 3: Complete — redirect to dashboard
+
 # Ultracite Code Standards
 
 This project uses **Ultracite**, a zero-config preset that enforces strict code quality standards through automated formatting and linting.
