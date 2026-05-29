@@ -54,12 +54,10 @@ on("monitor_tick", async (event: MonitorTick) => {
   );
 
   // Extract URLs from search results
-  const urlMatches = search.results.match(/https?:\/\/[^\s)\]>]+/g) ?? [];
+  const urlMatches = search.results.match(/https?:\/\/[^\s\)\]>"]+/g) ?? [];
   const urls = urlMatches
     .slice(0, 2)
-    .filter(
-      (u: string) => !(u.includes("google.com") || u.includes("bing.com"))
-    );
+    .filter((u: string) => !(u.includes("google.com") || u.includes("bing.com")));
 
   console.log(`[market-data-bot] Found ${urls.length} URLs: ${urls.join(", ")}`);
 
@@ -68,9 +66,11 @@ on("monitor_tick", async (event: MonitorTick) => {
   let wasScraped = false;
 
   if (urls.length > 0) {
-    console.log(`[market-data-bot] Scraping: ${urls[0]}`);
-    emitStep(runId, "market-data-bot", 3, "Scrape", `Scraping ${urls[0]}`, "running", 70);
-    const scrape = await smartScrape({ url: urls[0]!, dataType: "price", preferredMethod: "structured" });
+    // Use scraping_browser for financial sites that block scriptless scrapers
+    const isFinanceSite = urls[0]!.includes("yahoo") || urls[0]!.includes("cnbc") || urls[0]!.includes("bloomberg") || urls[0]!.includes("wsj");
+    console.log(`[market-data-bot] Scraping: ${urls[0]}${isFinanceSite ? " (browser)" : ""}`);
+    emitStep(runId, "market-data-bot", 3, "Scrape", `Scraping ${urls[0]}...`, "running", 70);
+    const scrape = await smartScrape({ url: urls[0]!, dataType: "price", preferredMethod: isFinanceSite ? "browser" : "structured" });
     scrapedContent = scrape.content;
     scrapedUrl = urls[0]!;
     wasScraped = !scrape.fromCache;
@@ -183,16 +183,9 @@ on("monitor_tick", async (event: MonitorTick) => {
     urls[0] ?? `https://news.search?q=${encodeURIComponent(company)}`;
 
   if (urls.length > 0) {
-    emitStep(
-      runId,
-      "news-data-bot",
-      3,
-      "Scrape",
-      `Scraping ${urls[0]} for detail...`,
-      "running",
-      60
-    );
-    const scrape = await smartScrape({ url: urls[0]!, dataType: "news" });
+    const isFinanceSite = urls[0]!.includes("yahoo") || urls[0]!.includes("cnbc") || urls[0]!.includes("bloomberg");
+    emitStep(runId, "news-data-bot", 3, "Scrape", `Scraping ${urls[0]}${isFinanceSite ? " (browser)" : ""}...`, "running", 60);
+    const scrape = await smartScrape({ url: urls[0]!, dataType: "news", preferredMethod: isFinanceSite ? "browser" : undefined });
     detail = scrape.content;
     scrapedUrl = urls[0]!;
     console.log(`[news-data-bot] Scraped ${detail.length} chars from ${urls[0]}${scrape.fromCache ? " (cached)" : ""}`);

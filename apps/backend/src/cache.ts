@@ -317,15 +317,19 @@ export async function smartScrape(
   if (options.preferredMethod === "structured") {
     const structured = await tryStructuredExtractor(url, dataType);
     if (structured) {
-      await storeCache(
-        url,
-        dataType,
-        structured.content,
-        structured.receipt,
-        query
-      );
+      await storeCache(url, dataType, structured.content, structured.receipt, query);
       return { ...structured, fromCache: false };
     }
+  }
+
+  // 2b. If preferred method is browser, jump straight there
+  if (options.preferredMethod === "browser") {
+    const browser = await tryScrapingBrowser(url);
+    if (browser.status === "success") {
+      await storeCache(url, dataType, browser.content, browser.receipt, query);
+      return { content: browser.content, receipt: browser.receipt, fromCache: false };
+    }
+    // Fall through to other methods
   }
 
   // 3. Try scrape_as_markdown (medium cost)
@@ -392,7 +396,6 @@ async function tryStructuredExtractor(
       "walmart_product",
       "google_shopping",
       "ebay_product",
-      "yahoo_finance_business",
     ],
     filing: ["yahoo_finance_business"],
     social: [
@@ -466,6 +469,9 @@ async function tryScrapeAsMarkdown(url: string): Promise<MethodResult> {
   try {
     const result = await callMcpTool("brightdata", tool.name, { url });
     const text = extractText(result);
+    if (isBlockedPage(text, url)) {
+      return { status: "failed", content: "", receipt: {} as EvidenceReceipt, error: "Blocked page detected" };
+    }
     logCredit("brightdata", "scrape_as_markdown", 2);
     return {
       status: "success",
