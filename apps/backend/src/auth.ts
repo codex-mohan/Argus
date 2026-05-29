@@ -88,17 +88,6 @@ async function verifyPassword(
   encodedHash: string
 ): Promise<boolean> {
   try {
-    const hash = await argon2id({
-      password,
-      salt: new Uint8Array(0), // salt extracted from encoded hash internally by hash-wasm
-      parallelism: ARGON2_PARALLELISM,
-      iterations: ARGON2_ITERATIONS,
-      memorySize: ARGON2_MEMORY,
-      hashLength: ARGON2_HASH_LENGTH,
-      outputType: "encoded",
-    });
-    // hash-wasm argon2id doesn't have a direct verify function.
-    // We parse the encoded hash and compare.
     const parts = encodedHash.split("$");
     if (parts.length < 6) {
       return false;

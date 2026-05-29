@@ -18,109 +18,271 @@ interface AgentFlowTimelineProps {
   steps: StepEvent[];
 }
 
-const AGENT_COLORS: Record<string, string> = {
-  "market-data-bot": "text-emerald-400",
-  "news-data-bot": "text-blue-400",
-  "social-data-bot": "text-pink-400",
-  "supplier-data-bot": "text-amber-400",
-  "filing-data-bot": "text-cyan-400",
-  "gtm-lens": "text-amber-300",
-  "finance-lens": "text-emerald-300",
-  "security-lens": "text-red-300",
-  "correlation-engine": "text-violet-300",
-  "brief-writer": "text-indigo-300",
-  normalizer: "text-zinc-300",
+const AGENT_META: Record<
+  string,
+  { color: string; bg: string; icon: string; category: string }
+> = {
+  "market-data-bot": {
+    color: "#34d399",
+    bg: "rgba(52,211,153,0.08)",
+    icon: "📈",
+    category: "COLLECT",
+  },
+  "news-data-bot": {
+    color: "#60a5fa",
+    bg: "rgba(96,165,250,0.08)",
+    icon: "📰",
+    category: "COLLECT",
+  },
+  "social-data-bot": {
+    color: "#f472b6",
+    bg: "rgba(244,114,182,0.08)",
+    icon: "🔗",
+    category: "COLLECT",
+  },
+  "supplier-data-bot": {
+    color: "#fbbf24",
+    bg: "rgba(251,191,36,0.08)",
+    icon: "🏭",
+    category: "COLLECT",
+  },
+  "filing-data-bot": {
+    color: "#22d3ee",
+    bg: "rgba(34,211,238,0.08)",
+    icon: "📄",
+    category: "COLLECT",
+  },
+  normalizer: {
+    color: "#a78bfa",
+    bg: "rgba(167,139,250,0.08)",
+    icon: "⚙️",
+    category: "PROCESS",
+  },
+  "gtm-lens": {
+    color: "#d4a853",
+    bg: "rgba(212,168,83,0.08)",
+    icon: "⌘",
+    category: "ANALYZE",
+  },
+  "finance-lens": {
+    color: "#34d399",
+    bg: "rgba(52,211,153,0.08)",
+    icon: "◈",
+    category: "ANALYZE",
+  },
+  "security-lens": {
+    color: "#f87171",
+    bg: "rgba(248,113,113,0.08)",
+    icon: "◎",
+    category: "ANALYZE",
+  },
+  "correlation-engine": {
+    color: "#c084fc",
+    bg: "rgba(192,132,252,0.08)",
+    icon: "🔀",
+    category: "SYNTHESIZE",
+  },
+  "brief-writer": {
+    color: "#818cf8",
+    bg: "rgba(129,140,248,0.08)",
+    icon: "✍️",
+    category: "SYNTHESIZE",
+  },
 };
+
+const PIPELINE_ORDER = [
+  "market-data-bot",
+  "news-data-bot",
+  "social-data-bot",
+  "supplier-data-bot",
+  "filing-data-bot",
+  "normalizer",
+  "gtm-lens",
+  "finance-lens",
+  "security-lens",
+  "correlation-engine",
+  "brief-writer",
+];
+
+function statusIcon(status: StepEvent["status"]): string {
+  if (status === "running") return "●";
+  if (status === "success") return "✓";
+  if (status === "failed") return "✗";
+  return "–";
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  return `${Math.floor(s / 60)}m ago`;
+}
 
 export function AgentFlowTimeline({
   steps,
   maxSteps = 50,
 }: AgentFlowTimelineProps) {
-  const grouped = useMemo(() => {
-    const byAgent = new Map<string, StepEvent[]>();
+  // Group by agent, keep latest step per agent
+  const agentMap = useMemo(() => {
+    const m = new Map<string, StepEvent>();
     for (const step of steps.slice(-maxSteps)) {
-      const list = byAgent.get(step.agentId) ?? [];
-      list.push(step);
-      byAgent.set(step.agentId, list);
+      m.set(step.agentId, step);
     }
-    return byAgent;
+    return m;
   }, [steps, maxSteps]);
 
   if (steps.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center text-sm text-zinc-500">
-        No active pipeline runs. Add a company to watchlist or trigger a replay.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-xs text-zinc-400 uppercase tracking-wider">
-          Live Agent Activity
-        </h3>
-        <span className="text-xs text-zinc-500">{steps.length} steps</span>
-      </div>
-
-      <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
-        {Array.from(grouped.entries()).map(([agentId, agentSteps]) => {
-          const latest = agentSteps[agentSteps.length - 1]!;
-          const colorClass = AGENT_COLORS[agentId] ?? "text-zinc-300";
-          const isRunning = latest.status === "running";
-
+      <div className="space-y-2">
+        {PIPELINE_ORDER.map((agentId) => {
+          const meta = AGENT_META[agentId] ?? {
+            color: "#71717a",
+            bg: "transparent",
+            icon: "·",
+            category: "OTHER",
+          };
           return (
             <div
-              className={`relative overflow-hidden border-l-2 ${
-                isRunning
-                  ? "border-l-amber-500 bg-amber-500/5"
-                  : "border-l-zinc-700 bg-zinc-900/30"
-              } px-3 py-2 transition-all`}
               key={agentId}
+              className="flex items-center gap-3 rounded border border-zinc-800 px-3 py-2 opacity-40"
             >
-              <div className="flex items-center gap-2">
-                <span className={`font-bold font-mono text-xs ${colorClass}`}>
-                  {agentId.replace("-", " ").toUpperCase()}
-                </span>
-                {latest.lens && (
-                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400 uppercase tracking-wider">
-                    {latest.lens}
+              <span className="text-sm w-5 text-center">{meta.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="font-mono text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: meta.color }}
+                  >
+                    {agentId}
                   </span>
-                )}
-                {isRunning && (
-                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                )}
+                  <span className="text-[9px] text-zinc-700 uppercase tracking-widest">
+                    {meta.category}
+                  </span>
+                </div>
+                <div className="text-[10px] text-zinc-600 mt-0.5">
+                  Waiting for pipeline run…
+                </div>
               </div>
-
-              <div className="mt-1 text-xs text-zinc-300">{latest.label}</div>
-              <div className="truncate text-[11px] text-zinc-500">
-                {latest.detail}
-              </div>
-
-              {/* Progress bar */}
-              <div className="mt-2 h-1 w-full bg-zinc-800">
-                <div
-                  className={`h-full transition-all duration-500 ${
-                    latest.status === "failed"
-                      ? "bg-red-500"
-                      : latest.status === "success"
-                        ? "bg-emerald-500"
-                        : latest.status === "skipped"
-                          ? "bg-zinc-600"
-                          : "bg-amber-500"
-                  }`}
-                  style={{ width: `${latest.progress}%` }}
-                />
-              </div>
-
-              {/* Step counter */}
-              <div className="mt-1 text-right text-[10px] text-zinc-600">
-                step {latest.step} • {latest.status}
-              </div>
+              <div className="h-1 w-16 rounded-full bg-zinc-800" />
             </div>
           );
         })}
       </div>
+    );
+  }
+
+  // Show agents in pipeline order, then any extras
+  const ordered = [
+    ...PIPELINE_ORDER.filter((id) => agentMap.has(id)),
+    ...[...agentMap.keys()].filter((id) => !PIPELINE_ORDER.includes(id)),
+  ];
+
+  return (
+    <div className="space-y-1.5">
+      {ordered.map((agentId) => {
+        const latest = agentMap.get(agentId)!;
+        const meta = AGENT_META[agentId] ?? {
+          color: "#71717a",
+          bg: "rgba(255,255,255,0.03)",
+          icon: "·",
+          category: "OTHER",
+        };
+        const isRunning = latest.status === "running";
+        const isFailed = latest.status === "failed";
+
+        return (
+          <div
+            key={agentId}
+            className="rounded border transition-all"
+            style={{
+              borderColor: isRunning
+                ? meta.color + "40"
+                : isFailed
+                  ? "rgba(248,113,113,0.3)"
+                  : "rgba(63,63,70,0.6)",
+              background: isRunning ? meta.bg : "rgba(9,9,11,0.5)",
+            }}
+          >
+            <div className="flex items-start gap-3 px-3 py-2.5">
+              {/* Icon */}
+              <span className="text-sm mt-0.5 w-5 text-center shrink-0">
+                {meta.icon}
+              </span>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                {/* Header row */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className="font-mono text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: meta.color }}
+                  >
+                    {agentId}
+                  </span>
+                  <span className="text-[9px] text-zinc-700 uppercase tracking-widest shrink-0">
+                    {meta.category}
+                  </span>
+                  {isRunning && (
+                    <span
+                      className="inline-block h-1.5 w-1.5 animate-pulse rounded-full shrink-0"
+                      style={{ background: meta.color }}
+                    />
+                  )}
+                  <span
+                    className={`ml-auto shrink-0 text-[10px] font-mono ${
+                      isFailed
+                        ? "text-red-400"
+                        : isRunning
+                          ? "text-amber-400"
+                          : latest.status === "skipped"
+                            ? "text-zinc-600"
+                            : "text-emerald-400"
+                    }`}
+                  >
+                    {statusIcon(latest.status)} {latest.status}
+                  </span>
+                </div>
+
+                {/* Step label — this is the phase name like "Search", "Scrape", "Analyze" */}
+                <div
+                  className="text-xs font-semibold mb-0.5"
+                  style={{ color: isRunning ? "#e4e4e7" : "#a1a1aa" }}
+                >
+                  {latest.label}
+                </div>
+
+                {/* Detail — this is where the actual content goes */}
+                <div className="text-[11px] text-zinc-400 leading-snug break-words">
+                  {latest.detail}
+                </div>
+
+                {/* Progress + time */}
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-1 flex-1 rounded-full bg-zinc-800">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${latest.progress}%`,
+                        background: isFailed
+                          ? "#f87171"
+                          : latest.status === "skipped"
+                            ? "#52525b"
+                            : meta.color,
+                      }}
+                    />
+                  </div>
+                  <span className="shrink-0 font-mono text-[9px] text-zinc-600 tabular-nums">
+                    {latest.progress}%
+                  </span>
+                  <span className="shrink-0 text-[9px] text-zinc-700">
+                    {timeAgo(latest.timestamp)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

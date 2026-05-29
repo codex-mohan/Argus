@@ -70,7 +70,7 @@ function LensColumn({
   const briefSignals = lensSignals.slice(0, 6);
 
   return (
-    <div className="relative flex flex-col gap-3 border-border-subtle border-r p-5 transition-colors last:border-r-0 hover:bg-white/[0.015]">
+    <div className="relative flex min-w-0 flex-col gap-3 border-zinc-800 border-r p-5 transition-colors last:border-r-0 hover:bg-white/[0.015]">
       <div className="flex items-center justify-between border-border-subtle border-b pb-2">
         <div className="flex items-center gap-2 font-display font-semibold text-text-secondary text-xs uppercase tracking-wide">
           <div
@@ -97,7 +97,7 @@ function LensColumn({
             <div className="mb-1 font-semibold text-sm text-text-primary leading-snug tracking-tight">
               {s.headline}
             </div>
-            <div className="mb-2 text-text-secondary text-xs leading-relaxed">
+            <div className="mb-2 break-words text-text-secondary text-xs leading-relaxed">
               {s.synthesis}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -143,7 +143,7 @@ export default function LensGrid({ signals }: LensGridProps) {
   const security = signals.filter((s) => s.lens === "security");
 
   return (
-    <section className="grid grid-cols-1 border-border-subtle border-b lg:grid-cols-[1.4fr_1fr_1.15fr]">
+    <section className="grid grid-cols-1 border-zinc-800 border-b md:grid-cols-2 xl:grid-cols-3">
       <LensColumn
         bg="rgba(212,168,83,0.08)"
         color="#d4a853"

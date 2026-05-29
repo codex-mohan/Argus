@@ -278,19 +278,40 @@ on("lens_analysis_complete", async (event: LensAnalysisComplete) => {
       100
     );
 
-    // Persist convergence signal
+    // Persist convergence signal — headline from the highest-confidence lens finding
     if (verdict === "converged" || verdict === "contradicted") {
-      const dominantLens = deduped.reduce(
+      const dominantFinding = deduped.reduce(
         (best, f) => (f.confidence > best.confidence ? f : best),
         deduped[0]!
-      ).lens as "gtm" | "finance" | "security";
+      );
+      const dominantLens = dominantFinding.lens as "gtm" | "finance" | "security";
+
+      // Build a meaningful headline from the actual lens findings
+      // e.g. "NVIDIA: [GTM] 340 AI engineer roles posted in Austin — corroborated by Finance + Security lenses"
+      const supportingLenses = Array.from(uniqueLenses)
+        .filter((l) => l !== dominantLens)
+        .map((l) => l.toUpperCase())
+        .join(" + ");
+      const baseHeadline = dominantFinding.finding.headline;
+      const correlationHeadline = supportingLenses
+        ? `${baseHeadline} [corroborated by ${supportingLenses}]`
+        : baseHeadline;
+
+      // Build synthesis from all lens findings
+      const lensSnippets = deduped
+        .map((f) => `[${f.lens.toUpperCase()}] ${f.finding.synthesis.split('.')[0]}.`)
+        .join(' ');
+      const correlationSynthesis = contradictions.length > 0
+        ? `${lensSnippets} CONFLICT: ${contradictions.map((c) => c.description).join('; ')}.`
+        : lensSnippets;
+
       persistSignal({
         id: `corr_${runId}_${Date.now()}`,
         lens: dominantLens,
         severity:
           compositeScore > 80 ? "high" : compositeScore > 60 ? "medium" : "low",
-        headline: `${company}: ${verdict === "converged" ? "cross-lens convergence" : "cross-lens contradiction"} (${uniqueLenses.size} lenses, score ${compositeScore})`,
-        synthesis: `Signals from ${Array.from(uniqueLenses).join(", ")} lenses ${verdict === "converged" ? "converged" : "showed contradictions"} for ${company}.${contradictions.length > 0 ? ` Contradictions: ${contradictions.map((c) => c.description).join("; ")}` : ""}`,
+        headline: correlationHeadline,
+        synthesis: correlationSynthesis,
         source_urls: deduped.flatMap((f) => f.finding.sourceUrls).slice(0, 5),
         confidence: compositeScore / 100,
         agent_id: "correlation-engine",

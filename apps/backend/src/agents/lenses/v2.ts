@@ -211,8 +211,14 @@ SOURCES: url1, url2
 BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 15%, say 15%. Use the actual numbers from the raw data.`;
 
   // 4. LLM Analysis
-  let headline = `${company} — ${lens.toUpperCase()} analysis`;
-  let synthesis = `Analyzed ${facts.length} facts for ${company}.`;
+  // Fallback: use best fact claim as headline if LLM doesn't respond
+  const topFact = facts.reduce((best, f) => f.confidence > best.confidence ? f : best, facts[0]!);
+  let headline = topFact
+    ? `${company} [${lens.toUpperCase()}]: ${topFact.claim.slice(0, 100)}`
+    : `${company} — ${lens.toUpperCase()} analysis`;
+  let synthesis = topFact
+    ? `${topFact.claim} — Source: ${topFact.sourceUrl}`
+    : `Analyzed ${facts.length} facts for ${company}.`;
   // Base confidence from fact quality, not hardcoded 0.7
   let confidence =
     facts.length > 0
@@ -251,7 +257,8 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
 
     if (text) {
       const hl = text.match(/HEADLINE:\s*(.+)/i);
-      const syn = text.match(/SYNTHESIS:\s*(.+)/is);
+      // Capture multi-line SYNTHESIS up to the next labelled section
+      const syn = text.match(/SYNTHESIS:\s*([\.\s\S]+?)(?=\nCONFIDENCE:|\nSOURCES:|$)/i);
       const conf = text.match(/CONFIDENCE:\s*(0\.\d+|1\.0|1)/i);
       const src = text.match(/SOURCES:\s*(.+)/i);
 
