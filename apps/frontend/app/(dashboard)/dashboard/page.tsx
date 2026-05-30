@@ -279,32 +279,39 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0">
       {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-zinc-800 border-b bg-zinc-950 px-5 py-3">
-        <div className="flex items-center gap-4">
-          <div>
-            <span className="font-semibold text-sm text-zinc-100">Command Deck</span>
-            <span className={`ml-2 text-[10px] ${connected ? "text-emerald-400" : "text-red-400"}`}>
-              {connected ? "● Live" : "○ Offline"}
-            </span>
-          </div>
-          {/* KPI strip */}
+      <div className="flex items-center gap-3 border-zinc-800 border-b bg-zinc-950 px-5 py-2.5">
+        {/* Title — never wraps */}
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="whitespace-nowrap font-semibold text-sm text-zinc-100">Command Deck</span>
+          <span className={`whitespace-nowrap text-[10px] ${connected ? "text-emerald-400" : "text-red-400"}`}>
+            {connected ? "● Live" : "○ Offline"}
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div className="h-4 w-px shrink-0 bg-zinc-800" />
+
+        {/* KPI strip — scrolls horizontally if needed, never wraps title */}
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto">
           {[
-            { label: "GTM", value: gtmCount, color: LENS_COLORS.gtm },
-            { label: "Finance", value: finCount, color: LENS_COLORS.finance },
-            { label: "Security", value: secCount, color: LENS_COLORS.security },
-            { label: "Agents", value: `${activeAgents}/11`, color: "#71717a" },
-            { label: "Avg Conf", value: `${avgConf}%`, color: "#a1a1aa" },
+            { label: "GTM",      value: gtmCount,           color: LENS_COLORS.gtm },
+            { label: "Finance",  value: finCount,            color: LENS_COLORS.finance },
+            { label: "Security", value: secCount,            color: LENS_COLORS.security },
+            { label: "Agents",   value: `${activeAgents}/11`, color: "#71717a" },
+            { label: "Conf",     value: `${avgConf}%`,       color: "#a1a1aa" },
           ].map((k) => (
-            <div key={k.label} className="hidden items-center gap-1.5 sm:flex">
+            <div key={k.label} className="flex shrink-0 items-center gap-1">
               <span className="text-[9px] uppercase tracking-widest text-zinc-600">{k.label}</span>
-              <span className="font-mono text-xs font-bold tabular-nums" style={{ color: k.color }}>{k.value}</span>
+              <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color: k.color }}>{k.value}</span>
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Controls — right side, never shrinks */}
+        <div className="flex shrink-0 items-center gap-2">
           <DemoModeToggle disabled={running} mode={demoMode} onChange={setDemoMode} />
           <button
-            className="rounded bg-amber-600 px-3 py-1.5 font-semibold text-white text-xs hover:bg-amber-500 disabled:opacity-40 transition-colors"
+            className="whitespace-nowrap rounded bg-amber-600 px-3 py-1.5 font-semibold text-white text-xs hover:bg-amber-500 disabled:opacity-40 transition-colors"
             disabled={running} onClick={handleRun} type="button"
           >
             {running ? "Running…" : "Trigger Run"}
@@ -349,9 +356,11 @@ export default function DashboardPage() {
 
           {/* Live Terminal — fills remaining height */}
           <div className="flex flex-col flex-1 px-4 py-3">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center gap-2">
               <div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-600">Live Run Terminal</div>
-              {steps.length > 0 && <span className="font-mono text-[9px] text-zinc-700">{steps.length} events</span>}
+              {steps.length > 0 && (
+                <span className="font-mono text-[9px] text-zinc-700">· {steps.length} events</span>
+              )}
             </div>
             <LiveTerminal steps={steps} maxLines={200} />
           </div>
