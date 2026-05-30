@@ -11,7 +11,7 @@ import { Database } from "bun:sqlite";
 import { argon2id } from "hash-wasm";
 import { jwtVerify, SignJWT } from "jose";
 
-const db = new Database("argus_state.sqlite");
+const db = new Database(process.env.DB_PATH ?? "argus_state.sqlite");
 
 // ─── Schema ────────────────────────────────────────────────────────────────
 

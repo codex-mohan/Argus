@@ -169,7 +169,7 @@ export function getIndexedModelStats(): {
   byCapability: Record<string, number>;
   lastIndexed: string | null;
 } {
-  const db = new Database("argus_state.sqlite");
+  const db = new Database(process.env.DB_PATH ?? "argus_state.sqlite");
 
   const total = db.query("SELECT COUNT(*) as c FROM model_catalog").get() as {
     c: number;
