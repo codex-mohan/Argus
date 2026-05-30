@@ -340,23 +340,42 @@ export function getAgentStatuses(): Array<{
 
 // ─── Watchlist ─────────────────────────────────────────────────────────────
 
-let watchlist: string[] = ["NVIDIA", "AMD"];
-
 export function getWatchlist(): string[] {
-  return [...watchlist];
-}
-
-export function addToWatchlist(company: string): void {
-  const normalized = company.trim();
-  if (!watchlist.includes(normalized)) {
-    watchlist.push(normalized);
+  try {
+    const rows = db.query("SELECT watchlist FROM users").all() as Array<{
+      watchlist: string;
+    }>;
+    const allCompanies = new Set<string>();
+    
+    for (const row of rows) {
+      if (row.watchlist) {
+        try {
+          const list = JSON.parse(String(row.watchlist));
+          if (Array.isArray(list)) {
+            for (const c of list) {
+              allCompanies.add(c);
+            }
+          }
+        } catch {
+          // invalid JSON in column
+        }
+      }
+    }
+    
+    const companies = Array.from(allCompanies);
+    return companies.length > 0 ? companies : ["NVIDIA", "AMD"];
+  } catch (err) {
+    console.error("[state] Error fetching watchlists from DB:", err);
+    return ["NVIDIA", "AMD"];
   }
 }
 
+export function addToWatchlist(company: string): void {
+  // Deprecated in favor of updateUserWatchlist in auth.ts
+}
+
 export function removeFromWatchlist(company: string): void {
-  watchlist = watchlist.filter(
-    (c) => c.toLowerCase() !== company.toLowerCase()
-  );
+  // Deprecated in favor of updateUserWatchlist in auth.ts
 }
 
 // ─── Stats ─────────────────────────────────────────────────────────────────
