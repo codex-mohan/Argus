@@ -17,7 +17,7 @@ import {
 import AgentPanel from "@/components/agent-panel.tsx";
 import { AuditScoreRing } from "@/components/audit-score-ring.tsx";
 import ConvergenceCard from "@/components/convergence-card.tsx";
-import { DemoModeToggle } from "@/components/demo-mode-toggle.tsx";
+import { PipelineModeToggle } from "@/components/pipeline-mode-toggle.tsx";
 import LensGrid from "@/components/lens-grid.tsx";
 import { LiveTerminal } from "@/components/live-terminal.tsx";
 import {
@@ -29,7 +29,7 @@ import {
   useWatchlist,
 } from "@/lib/api.ts";
 
-type DemoMode = "live" | "cached" | "replay";
+
 
 const LENS_COLORS = { gtm: "#d4a853", finance: "#34d399", security: "#f87171" };
 const SEV_COLORS = {
@@ -333,11 +333,11 @@ function AgentStatusStrip({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { signals, steps, convergence, brief, connected, error } =
+  const { signals, steps, convergence, brief, connected, error: streamError } =
     useSignalStream();
   const { agents, error: agentError } = useAgentStatus();
-  const [demoMode, setDemoMode] = useState<DemoMode>("live");
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(streamError);
 
   const activeAgents = agents.filter((a) => a.status === "active").length;
 
@@ -362,18 +362,16 @@ export default function DashboardPage() {
   }, [convergence]);
 
   async function handleRun() {
-    if (running) {
-      return;
-    }
     setRunning(true);
+    setError(null);
     try {
-      if (demoMode === "replay") {
-        await triggerReplay("nvidia_convergence");
-      } else {
-        await triggerRun("NVIDIA", demoMode);
-      }
-    } catch {}
-    setTimeout(() => setRunning(false), 3000);
+      const company = "NVIDIA";
+      await triggerRun(company, "live");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunning(false);
+    }
   }
 
   // KPI strip values
@@ -431,11 +429,7 @@ export default function DashboardPage() {
 
         {/* Controls — right side, never shrinks */}
         <div className="flex shrink-0 items-center gap-2">
-          <DemoModeToggle
-            disabled={running}
-            mode={demoMode}
-            onChange={setDemoMode}
-          />
+          <PipelineModeToggle />
           <button
             className="whitespace-nowrap rounded bg-amber-600 px-3 py-1.5 font-semibold text-white text-xs transition-colors hover:bg-amber-500 disabled:opacity-40"
             disabled={running}
