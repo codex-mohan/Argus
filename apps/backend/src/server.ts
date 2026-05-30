@@ -331,7 +331,7 @@ let mcpState: Record<
 
 async function connectMcpServersAsync(): Promise<void> {
   const brightDataKey = process.env.BRIGHTDATA_API_KEY;
-  const cogneeUrl = process.env.COGNEE_MCP_URL ?? "http://localhost:8000";
+  const cogneeUrl = process.env.COGNEE_MCP_URL ?? "http://localhost:8000/sse";
 
   const mcpServers: McpServerConfig[] = [];
   const errors: Record<string, string | null> = {

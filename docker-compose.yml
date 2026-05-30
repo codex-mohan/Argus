@@ -11,7 +11,7 @@ services:
       AIMLAPI_KEY: "${AIMLAPI_KEY}"
       OPENAI_BASE_URL: "https://api.aimlapi.com/v1"
       OPENAI_API_KEY: "${AIMLAPI_KEY}"
-      COGNEE_MCP_URL: "http://cognee-mcp:8000"
+      COGNEE_MCP_URL: "http://cognee-mcp:8000/sse"
       PORT: "3001"
     depends_on:
       cognee-mcp:
