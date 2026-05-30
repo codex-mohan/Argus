@@ -3,16 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  Bot,
+  FileBarChart2,
+  LayoutDashboard,
+  MessageSquare,
+  Radio,
+  Settings2,
+} from "lucide-react";
 import { useAuth } from "@/contexts/auth-context.tsx";
 import { useSignalStream } from "@/lib/api.ts";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: "⌘" },
-  { label: "Chat", href: "/chat", icon: "◆" },
-  { label: "Agents", href: "/agents", icon: "◈" },
-  { label: "Signals", href: "/signals", icon: "◎" },
-  { label: "Reports", href: "/reports", icon: "▤" },
-  { label: "Settings", href: "/settings", icon: "⚙" },
+  { label: "Dashboard",  href: "/dashboard", Icon: LayoutDashboard },
+  { label: "Chat",       href: "/chat",      Icon: MessageSquare   },
+  { label: "Agents",     href: "/agents",    Icon: Bot             },
+  { label: "Signals",    href: "/signals",   Icon: Radio           },
+  { label: "Reports",    href: "/reports",   Icon: FileBarChart2   },
+  { label: "Settings",   href: "/settings",  Icon: Settings2       },
 ];
 
 export function Sidebar() {
@@ -73,6 +81,7 @@ export function Sidebar() {
         <ul className="space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
+            const { Icon } = item;
             return (
               <li key={item.href}>
                 <Link
@@ -83,9 +92,7 @@ export function Sidebar() {
                   }`}
                   href={item.href}
                 >
-                  <span className="flex h-5 w-5 items-center justify-center text-[10px]">
-                    {item.icon}
-                  </span>
+                  <Icon size={14} strokeWidth={1.75} />
                   {item.label}
                 </Link>
               </li>

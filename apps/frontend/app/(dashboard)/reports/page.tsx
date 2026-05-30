@@ -16,10 +16,16 @@ import {
 } from "recharts";
 import { AuditScoreRing } from "@/components/audit-score-ring.tsx";
 
-interface BriefSignal {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Signal {
+  agent_id: string;
   confidence: number;
+  detected_at: string;
   headline: string;
-  lens: string;
+  id: string;
+  lens: "gtm" | "finance" | "security";
+  severity: "low" | "medium" | "high" | "critical";
   source_urls: string[];
   synthesis: string;
 }
@@ -29,7 +35,6 @@ interface Brief {
   generatedAt: string;
   headline: string;
   keyFindings: string[];
-  keySignals?: BriefSignal[];
   lens?: string;
   recommendation: string;
   riskScore: number;
@@ -37,585 +42,633 @@ interface Brief {
   summary: string;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const LENS_META = {
+  gtm: {
+    color: "#d4a853",
+    bg: "rgba(212,168,83,0.06)",
+    border: "rgba(212,168,83,0.2)",
+    icon: "⌘",
+    label: "GTM Lens",
+    desc: "Competitor moves, hiring signals, product launches, buying intent, account expansion",
+  },
+  finance: {
+    color: "#34d399",
+    bg: "rgba(52,211,153,0.06)",
+    border: "rgba(52,211,153,0.2)",
+    icon: "◈",
+    label: "Finance Lens",
+    desc: "Price action, filing anomalies, supply chain stress, earnings divergence, macro signals",
+  },
+  security: {
+    color: "#f87171",
+    bg: "rgba(248,113,113,0.06)",
+    border: "rgba(248,113,113,0.2)",
+    icon: "◎",
+    label: "Security Lens",
+    desc: "Vendor risk, regulatory actions, key personnel changes, brand exposure, threat intel",
+  },
+} as const;
+
+const SEV_COLORS = {
+  critical: "#ef4444",
+  high: "#f87171",
+  medium: "#fbbf24",
+  low: "#6b7280",
+} as const;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function safeHostname(url: string): string {
+  try { return new URL(url).hostname.replace("www.", ""); } catch { return url; }
+}
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 }
 
-function safeHostname(url: string): string {
-  try {
-    return new URL(url).hostname.replace("www.", "");
-  } catch {
-    return url;
-  }
+function timeAgo(iso: string): string {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
 }
 
-const LENS_COLORS: Record<string, string> = {
-  gtm: "#d4a853",
-  finance: "#34d399",
-  security: "#f87171",
-};
+// ─── Signal Card ──────────────────────────────────────────────────────────────
 
-const LENS_BG: Record<string, string> = {
-  gtm: "rgba(212,168,83,0.10)",
-  finance: "rgba(52,211,153,0.10)",
-  security: "rgba(248,113,113,0.10)",
-};
+function SignalCard({ signal, color }: { signal: Signal; color: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const conf = Math.round(signal.confidence * 100);
 
-const LENS_BORDER: Record<string, string> = {
-  gtm: "rgba(212,168,83,0.25)",
-  finance: "rgba(52,211,153,0.25)",
-  security: "rgba(248,113,113,0.25)",
-};
+  return (
+    <div
+      className="border-l-2 py-3 pl-3 transition-colors hover:bg-white/[0.02] cursor-pointer"
+      style={{ borderColor: color }}
+      onClick={() => setExpanded((e) => !e)}
+    >
+      {/* Top row: severity + time + confidence */}
+      <div className="mb-1.5 flex items-center gap-2">
+        <span
+          className="rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase"
+          style={{ background: `${SEV_COLORS[signal.severity]}18`, color: SEV_COLORS[signal.severity] }}
+        >
+          {signal.severity}
+        </span>
+        <span className="text-[9px] text-zinc-700">{timeAgo(signal.detected_at)}</span>
+        <div className="ml-auto flex items-center gap-1.5">
+          {/* Confidence bar */}
+          <div className="h-1 w-16 rounded-full bg-zinc-800">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${conf}%`,
+                background: conf >= 80 ? "#34d399" : conf >= 60 ? "#fbbf24" : "#f87171",
+              }}
+            />
+          </div>
+          <span className="font-mono text-[9px] text-zinc-500 tabular-nums">{conf}%</span>
+        </div>
+      </div>
 
-function getLensFromFinding(text: string): "gtm" | "finance" | "security" {
-  const t = text.toLowerCase();
-  if (
-    t.match(/\[gtm\]|gtm lens|hiring|competitor|product launch|buying intent/)
-  ) {
-    return "gtm";
-  }
-  if (
-    t.match(
-      /\[security\]|security lens|regulatory|vendor risk|breach|supply chain/
-    )
-  ) {
-    return "security";
-  }
-  return "finance";
+      {/* Headline */}
+      <div className="mb-1 text-xs font-semibold text-zinc-100 leading-snug">
+        {/* Strip the [LENS]: prefix if present */}
+        {signal.headline.replace(/^[A-Z]+\s*\[[A-Z]+\]:\s*/i, "").replace(/^\[(?:GTM|FINANCE|SECURITY)\]\s*/i, "")}
+      </div>
+
+      {/* Synthesis — show full when expanded */}
+      {signal.synthesis && signal.synthesis !== signal.headline && (
+        <div className={`text-[11px] text-zinc-400 leading-relaxed ${expanded ? "" : "line-clamp-2"}`}>
+          {signal.synthesis.replace(/\s*—\s*Source:\s*https?:\/\/\S+/g, "").trim()}
+        </div>
+      )}
+
+      {/* Sources */}
+      {expanded && signal.source_urls.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {signal.source_urls.slice(0, 3).map((url, i) => (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-[9px] text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
+              title={url}
+            >
+              ↗ {safeHostname(url)}
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Agent */}
+      <div className="mt-1 text-[9px] text-zinc-700">{signal.agent_id}</div>
+    </div>
+  );
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const [briefs, setBriefs] = useState<Brief[]>([]);
+  const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<number>(0);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadBriefs();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  async function loadBriefs() {
+  async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/briefs");
-      const data = await res.json();
-      setBriefs(data.briefs ?? []);
+      const [briefsRes, signalsRes] = await Promise.all([
+        fetch("/api/briefs"),
+        fetch("/api/signals"),
+      ]);
+      const briefsData = await briefsRes.json();
+      const signalsData = await signalsRes.json();
+      const fetchedBriefs: Brief[] = briefsData.briefs ?? [];
+      setBriefs(fetchedBriefs);
+      setSignals(signalsData.signals ?? []);
+      if (fetchedBriefs.length > 0 && !selectedCompany) {
+        setSelectedCompany(fetchedBriefs[0].company);
+      }
     } catch {
-      setBriefs([]);
+      setBriefs([]); setSignals([]);
     } finally {
       setLoading(false);
     }
   }
 
-  const brief = useMemo(() => briefs[selected], [briefs, selected]);
-  const companies = useMemo(
-    () => [...new Set(briefs.map((b) => b.company))],
-    [briefs]
+  // All companies from briefs + signals
+  const companies = useMemo(() => {
+    const fromBriefs = briefs.map((b) => b.company);
+    const fromSignals = signals.map((s) => {
+      const m = s.headline.match(/^([A-Z]+)\s*[\[—]/);
+      return m?.[1] ?? null;
+    }).filter(Boolean) as string[];
+    return [...new Set([...fromBriefs, ...fromSignals])];
+  }, [briefs, signals]);
+
+  // Brief for selected company (most recent)
+  const brief = useMemo(() =>
+    briefs.filter((b) => b.company === selectedCompany).at(-1),
+    [briefs, selectedCompany]
   );
 
-  // Per-lens finding breakdown
-  const lensBreakdown = useMemo(() => {
-    if (!brief) {
-      return { gtm: [], finance: [], security: [] };
-    }
-    const all = brief.keyFindings ?? [];
-    return {
-      gtm: all.filter((f) => getLensFromFinding(f) === "gtm"),
-      finance: all.filter((f) => getLensFromFinding(f) === "finance"),
-      security: all.filter((f) => getLensFromFinding(f) === "security"),
-    };
-  }, [brief]);
-
-  // Radar chart data
-  const radarData = useMemo(() => {
-    if (!brief) {
-      return [];
-    }
-    const gtmScore = Math.min(100, lensBreakdown.gtm.length * 25 + 10);
-    const financeScore = Math.min(100, lensBreakdown.finance.length * 25 + 10);
-    const securityScore = Math.min(
-      100,
-      lensBreakdown.security.length * 25 + 10
+  // Signals for selected company — filter by headline containing company name
+  const companySignals = useMemo(() => {
+    if (!selectedCompany) return signals;
+    return signals.filter((s) =>
+      s.headline.toLowerCase().includes(selectedCompany.toLowerCase())
     );
-    return [
-      { lens: "GTM", score: gtmScore, fullMark: 100 },
-      { lens: "Finance", score: financeScore, fullMark: 100 },
-      { lens: "Security", score: securityScore, fullMark: 100 },
-    ];
-  }, [brief, lensBreakdown]);
+  }, [signals, selectedCompany]);
 
-  // Confidence bar chart data (key findings with confidence)
-  const confidenceData = useMemo(() => {
-    if (!brief) {
-      return [];
-    }
-    const signals = brief.keySignals ?? [];
-    if (signals.length > 0) {
-      return signals.slice(0, 8).map((s, i) => ({
-        name: `#${i + 1}`,
-        label: s.headline.slice(0, 48) + (s.headline.length > 48 ? "…" : ""),
+  const gtmSignals      = useMemo(() => companySignals.filter((s) => s.lens === "gtm"), [companySignals]);
+  const financeSignals  = useMemo(() => companySignals.filter((s) => s.lens === "finance"), [companySignals]);
+  const securitySignals = useMemo(() => companySignals.filter((s) => s.lens === "security"), [companySignals]);
+
+  // Confidence chart: top signals by confidence
+  const confidenceChart = useMemo(() =>
+    companySignals
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 10)
+      .map((s, i) => ({
+        idx: `#${i + 1}`,
+        label: s.headline.replace(/^[A-Z]+\s*[\[—][^\]]*[\]:]?\s*/i, "").slice(0, 60),
         confidence: Math.round(s.confidence * 100),
-        lens: s.lens ?? "finance",
-      }));
-    }
-    // Fallback: create entries from key findings
-    return (brief.keyFindings ?? []).slice(0, 6).map((f, i) => ({
-      name: `#${i + 1}`,
-      label: f.slice(0, 48) + (f.length > 48 ? "…" : ""),
-      confidence: Math.round(65 + Math.random() * 20),
-      lens: getLensFromFinding(f),
-    }));
-  }, [brief]);
+        lens: s.lens,
+      })),
+    [companySignals]
+  );
+
+  // Risk score: from brief or computed from signal confidence
+  const riskScore = useMemo(() => {
+    if (brief?.riskScore) return brief.riskScore;
+    if (companySignals.length === 0) return null;
+    const high = companySignals.filter((s) => s.severity === "high" || s.severity === "critical").length;
+    return Math.round((high / companySignals.length) * 100);
+  }, [brief, companySignals]);
 
   if (loading) {
     return (
-      <div className="flex h-96 items-center justify-center bg-zinc-950">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-amber-400" />
-          <span className="text-xs text-zinc-500">
-            Loading intelligence reports...
-          </span>
-        </div>
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-amber-400" />
       </div>
     );
   }
 
-  if (briefs.length === 0) {
+  if (companies.length === 0) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-4">
-        <div className="mb-2 text-4xl">📡</div>
-        <h1 className="font-bold text-lg text-zinc-100">
-          No Intelligence Reports Yet
-        </h1>
-        <p className="max-w-sm text-center text-sm text-zinc-500">
-          Trigger a pipeline run to begin collecting and analyzing signals
-          across GTM, Finance, and Security lenses.
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4">
+        <div className="text-3xl">📡</div>
+        <h1 className="font-bold text-base text-zinc-100">No Intelligence Reports Yet</h1>
+        <p className="max-w-sm text-center text-xs text-zinc-500">
+          Trigger a pipeline run from the Dashboard to collect signals across GTM, Finance, and Security lenses.
         </p>
         <button
-          className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-5 py-2 font-semibold text-amber-300 text-xs transition-colors hover:bg-amber-500/20"
+          type="button"
+          className="rounded border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition-colors"
           onClick={async () => {
             try {
-              await fetch("/api/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ company: "NVIDIA", mode: "live" }),
-              });
+              await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ company: "NVIDIA", mode: "live" }) });
             } catch {}
-            setTimeout(loadBriefs, 30_000);
+            setTimeout(load, 30_000);
           }}
-          type="button"
         >
-          Trigger Pipeline Run
+          Trigger Pipeline Run → NVIDIA
         </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-zinc-800 border-b px-6 py-4">
-        <div>
-          <h1 className="font-semibold text-sm text-zinc-100">
-            Intelligence Reports
-          </h1>
-          <p className="text-[10px] text-zinc-500">
-            {briefs.length} reports across {companies.length}{" "}
-            {companies.length === 1 ? "company" : "companies"}
-          </p>
+    <div>
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 border-zinc-800 border-b bg-zinc-950 px-6 py-3">
+        <div className="shrink-0">
+          <div className="font-semibold text-sm text-zinc-100">Intelligence Reports</div>
+          <div className="text-[10px] text-zinc-600">
+            {companySignals.length} signals · {gtmSignals.length} GTM · {financeSignals.length} Finance · {securitySignals.length} Security
+          </div>
         </div>
-        <div className="flex gap-2">
+
+        <div className="h-4 w-px bg-zinc-800" />
+
+        {/* Company tabs */}
+        <div className="flex items-center gap-1.5">
           {companies.map((c) => (
             <button
-              className={`rounded px-3 py-1 font-semibold text-[10px] uppercase tracking-wider transition-all ${
-                brief?.company === c
-                  ? "border border-amber-500/30 bg-amber-500/10 text-amber-400"
-                  : "border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-              }`}
               key={c}
-              onClick={() => {
-                const idx = briefs.findIndex((b) => b.company === c);
-                if (idx >= 0) {
-                  setSelected(idx);
-                }
-              }}
               type="button"
+              onClick={() => setSelectedCompany(c)}
+              className={`rounded px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                selectedCompany === c
+                  ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                  : "text-zinc-600 border border-zinc-800 hover:text-zinc-300 hover:border-zinc-600"
+              }`}
             >
               {c}
             </button>
           ))}
-          <button
-            className="rounded border border-zinc-700 px-3 py-1 text-[10px] text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
-            onClick={loadBriefs}
-            type="button"
-          >
-            Refresh
-          </button>
         </div>
+
+        <button
+          type="button"
+          onClick={load}
+          className="ml-auto rounded border border-zinc-800 px-3 py-1 text-[10px] text-zinc-500 hover:border-zinc-600 hover:text-zinc-300 transition-colors"
+        >
+          ↻ Refresh
+        </button>
       </div>
 
-      {brief && (
-        <div className="mx-auto max-w-5xl space-y-5 px-6 py-6">
-          {/* ── Headline Block ─────────────────────────────────────────── */}
-          <div className="border border-zinc-800 bg-zinc-900/50 p-6">
-            <div className="mb-1 flex items-center gap-2">
-              <span
-                className="rounded px-2 py-0.5 font-bold text-[10px] uppercase tracking-wider"
-                style={{
-                  background: LENS_BG[brief.lens ?? "finance"],
-                  color: LENS_COLORS[brief.lens ?? "finance"],
-                  border: `1px solid ${LENS_BORDER[brief.lens ?? "finance"]}`,
-                }}
-              >
-                {(brief.lens ?? "finance").toUpperCase()} Primary
-              </span>
-              <span className="text-[10px] text-zinc-600">
-                {formatTime(brief.generatedAt)}
-              </span>
-              <span className="ml-auto font-mono text-[10px] text-zinc-600">
-                Risk: {brief.riskScore}/100
-              </span>
-            </div>
-            <h2 className="mt-3 font-bold text-xl text-zinc-50 leading-snug tracking-tight">
-              {brief.headline}
-            </h2>
-          </div>
+      <div className="mx-auto max-w-6xl space-y-4 px-6 py-5">
 
-          {/* ── KPI Row ────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              {
-                label: "GTM Signals",
-                value: lensBreakdown.gtm.length,
-                color: "#d4a853",
-              },
-              {
-                label: "Finance Signals",
-                value: lensBreakdown.finance.length,
-                color: "#34d399",
-              },
-              {
-                label: "Security Signals",
-                value: lensBreakdown.security.length,
-                color: "#f87171",
-              },
-              {
-                label: "Risk Score",
-                value: brief.riskScore,
-                color:
-                  brief.riskScore >= 75
-                    ? "#f87171"
-                    : brief.riskScore >= 50
-                      ? "#d4a853"
-                      : "#34d399",
-              },
-            ].map((tile) => (
-              <div
-                className="border border-zinc-800 bg-zinc-900/50 p-4"
-                key={tile.label}
-              >
-                <div className="mb-1 font-semibold text-[10px] text-zinc-500 uppercase tracking-wider">
-                  {tile.label}
-                </div>
-                <div
-                  className="font-bold font-mono text-2xl"
-                  style={{ color: tile.color }}
-                >
-                  {tile.value}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Visualizations Row ─────────────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* Radar Chart — lens risk profile */}
-            <div className="border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="mb-3 font-semibold text-[10px] text-zinc-500 uppercase tracking-wider">
-                Risk Lens Profile
-              </div>
-              <ResponsiveContainer height={220} width="100%">
-                <RadarChart
-                  cx="50%"
-                  cy="50%"
-                  data={radarData}
-                  outerRadius="70%"
-                >
-                  <PolarGrid stroke="rgba(255,255,255,0.06)" />
-                  <PolarAngleAxis
-                    dataKey="lens"
-                    tick={{
-                      fill: "#71717a",
-                      fontSize: 11,
-                      fontFamily: "monospace",
-                    }}
-                  />
-                  <Radar
-                    dataKey="score"
-                    fill="#d4a853"
-                    fillOpacity={0.15}
-                    name="Risk"
-                    stroke="#d4a853"
-                    strokeWidth={1.5}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Score Rings — existing component reused */}
-            <div className="border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="mb-3 font-semibold text-[10px] text-zinc-500 uppercase tracking-wider">
-                Lens Confidence
-              </div>
-              <div className="flex flex-wrap justify-around gap-4 pt-2">
-                <AuditScoreRing
-                  label="GTM"
-                  score={Math.min(100, lensBreakdown.gtm.length * 30 + 15)}
-                  verdict={
-                    lensBreakdown.gtm.length >= 3
-                      ? "high"
-                      : lensBreakdown.gtm.length > 0
-                        ? "medium"
-                        : "low"
-                  }
-                />
-                <AuditScoreRing
-                  label="Finance"
-                  score={Math.min(100, lensBreakdown.finance.length * 30 + 15)}
-                  verdict={
-                    lensBreakdown.finance.length >= 3
-                      ? "high"
-                      : lensBreakdown.finance.length > 0
-                        ? "medium"
-                        : "low"
-                  }
-                />
-                <AuditScoreRing
-                  label="Security"
-                  score={Math.min(100, lensBreakdown.security.length * 30 + 15)}
-                  verdict={
-                    lensBreakdown.security.length >= 3
-                      ? "high"
-                      : lensBreakdown.security.length > 0
-                        ? "medium"
-                        : "low"
-                  }
-                />
-                <AuditScoreRing
-                  label="Composite"
-                  score={brief.riskScore}
-                  verdict={
-                    brief.riskScore >= 75
-                      ? "high"
-                      : brief.riskScore >= 50
-                        ? "medium"
-                        : "low"
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Signal Confidence Bar Chart ────────────────────────────── */}
-          {confidenceData.length > 0 && (
-            <div className="border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="mb-3 font-semibold text-[10px] text-zinc-500 uppercase tracking-wider">
-                Signal Confidence by Finding
-              </div>
-              <ResponsiveContainer
-                height={Math.max(120, confidenceData.length * 36)}
-                width="100%"
-              >
-                <BarChart
-                  data={confidenceData}
-                  layout="vertical"
-                  margin={{ top: 0, right: 40, left: 8, bottom: 0 }}
-                >
-                  <XAxis
-                    axisLine={false}
-                    domain={[0, 100]}
-                    tick={{ fill: "#52525b", fontSize: 10 }}
-                    tickLine={false}
-                    type="number"
-                  />
-                  <YAxis
-                    axisLine={false}
-                    dataKey="name"
-                    tick={{ fill: "#71717a", fontSize: 10 }}
-                    tickLine={false}
-                    type="category"
-                    width={24}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!(active && payload?.[0])) {
-                        return null;
-                      }
-                      const d = payload[0]
-                        .payload as (typeof confidenceData)[0];
-                      return (
-                        <div className="max-w-xs rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-200">
-                          <div className="mb-1 font-semibold">{d.label}</div>
-                          <div
-                            style={{ color: LENS_COLORS[d.lens] ?? "#d4a853" }}
-                          >
-                            {d.lens.toUpperCase()} · {d.confidence}% confidence
-                          </div>
-                        </div>
-                      );
-                    }}
-                    cursor={{ fill: "rgba(255,255,255,0.03)" }}
-                  />
-                  <Bar dataKey="confidence" radius={[0, 3, 3, 0]}>
-                    {confidenceData.map((entry, index) => (
-                      <Cell
-                        fill={LENS_COLORS[entry.lens] ?? "#d4a853"}
-                        fillOpacity={0.75}
-                        key={`cell-${index}`}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* ── Executive Summary ──────────────────────────────────────── */}
-          <div className="border border-zinc-800 bg-zinc-900/30 p-6">
-            <div className="mb-3 font-semibold text-[10px] text-zinc-500 uppercase tracking-wider">
-              Executive Summary
-            </div>
-            <p className="whitespace-pre-line text-sm text-zinc-200 leading-relaxed">
-              {brief.summary}
-            </p>
-          </div>
-
-          {/* ── Per-Lens Key Findings ──────────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {(["gtm", "finance", "security"] as const).map((lens) => {
-              const findings = lensBreakdown[lens];
-              const color = LENS_COLORS[lens];
-              const bg = LENS_BG[lens];
-              const border = LENS_BORDER[lens];
-              const labels: Record<string, string> = {
-                gtm: "⌘ GTM Lens",
-                finance: "◈ Finance Lens",
-                security: "◎ Security Lens",
-              };
-              return (
-                <div
-                  className="p-4"
-                  key={lens}
-                  style={{ background: bg, border: `1px solid ${border}` }}
-                >
-                  <div className="mb-3 flex items-center justify-between">
+        {/* ── Executive Brief Block ──────────────────────────────────────────── */}
+        {brief ? (
+          <div className="border border-zinc-800 bg-zinc-900/40 p-5">
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
+                    Executive Brief · {formatTime(brief.generatedAt)}
+                  </span>
+                  {riskScore !== null && (
                     <span
-                      className="font-bold text-xs uppercase tracking-wider"
-                      style={{ color }}
+                      className="rounded px-1.5 py-0.5 font-mono text-[9px] font-bold"
+                      style={{
+                        background: riskScore >= 75 ? "rgba(248,113,113,0.15)" : riskScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(52,211,153,0.15)",
+                        color: riskScore >= 75 ? "#f87171" : riskScore >= 50 ? "#fbbf24" : "#34d399",
+                      }}
                     >
-                      {labels[lens]}
+                      Risk {riskScore}/100
                     </span>
-                    <span className="font-mono text-[10px] text-zinc-600">
-                      {findings.length} signals
-                    </span>
-                  </div>
-                  {findings.length > 0 ? (
-                    <ul className="space-y-2.5">
-                      {findings.slice(0, 5).map((f, i) => (
-                        <li
-                          className="flex gap-2 text-xs text-zinc-300 leading-relaxed"
-                          key={i}
-                        >
-                          <span
-                            className="mt-0.5 shrink-0 font-mono text-[10px]"
-                            style={{ color }}
-                          >
-                            {String(i + 1).padStart(2, "0")}
-                          </span>
-                          <span>
-                            {f.replace(/^\[(?:GTM|FINANCE|SECURITY)\]\s*/i, "")}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-zinc-600">
-                      No signals for this lens in this report.
-                    </p>
                   )}
                 </div>
-              );
-            })}
-          </div>
-
-          {/* ── Recommendation ─────────────────────────────────────────── */}
-          {brief.recommendation && (
-            <div className="border border-amber-500/20 bg-amber-500/5 p-6">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-amber-400">⚡</span>
-                <span className="font-semibold text-[10px] text-amber-500 uppercase tracking-wider">
-                  Recommended Actions
-                </span>
+                {/* Use actual headline — not the generic fallback */}
+                <h2 className="font-bold text-lg text-zinc-50 leading-snug tracking-tight">
+                  {brief.headline && !brief.headline.toLowerCase().includes("multiple intelligence lenses")
+                    ? brief.headline
+                    : `${selectedCompany}: ${
+                        financeSignals.length > 0 ? financeSignals[0].headline.replace(/^[A-Z]+\s*[\[—][^\]]*[\]:]?\s*/i, "") :
+                        gtmSignals.length > 0 ? gtmSignals[0].headline.replace(/^[A-Z]+\s*[\[—][^\]]*[\]:]?\s*/i, "") :
+                        "Intelligence signals collected across active lenses"
+                      }`
+                  }
+                </h2>
               </div>
-              <p className="whitespace-pre-line text-sm text-zinc-200 leading-relaxed">
-                {brief.recommendation}
-              </p>
-            </div>
-          )}
-
-          {/* ── Sources ────────────────────────────────────────────────── */}
-          {(brief.sources?.length ?? 0) > 0 && (
-            <div className="border border-zinc-800 bg-zinc-900/30 p-4">
-              <div className="mb-2 font-semibold text-[10px] text-zinc-500 uppercase tracking-wider">
-                Data Sources
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {brief.sources!.slice(0, 12).map((src, i) => (
-                  <a
-                    className="max-w-[200px] truncate rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[10px] text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
-                    href={src}
-                    key={i}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                    title={src}
+              {/* Risk bar */}
+              {riskScore !== null && (
+                <div className="shrink-0 text-right">
+                  <div className="mb-1 text-[9px] text-zinc-600">RISK LEVEL</div>
+                  <div
+                    className="font-mono text-2xl font-bold tabular-nums"
+                    style={{ color: riskScore >= 75 ? "#f87171" : riskScore >= 50 ? "#fbbf24" : "#34d399" }}
                   >
-                    {safeHostname(src)}
-                  </a>
-                ))}
+                    {riskScore}
+                    <span className="text-sm text-zinc-600">/100</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Summary — only show if it's not generic */}
+            {brief.summary && !brief.summary.toLowerCase().includes("multiple intelligence lenses have converged") && (
+              <p className="mb-4 text-sm text-zinc-300 leading-relaxed border-t border-zinc-800 pt-3">
+                {brief.summary}
+              </p>
+            )}
+
+            {/* Key findings from brief — as a numbered list */}
+            {(brief.keyFindings ?? []).filter((f) =>
+              !f.toLowerCase().includes("— gtm analysis") &&
+              !f.toLowerCase().includes("— finance analysis") &&
+              !f.toLowerCase().includes("— security analysis")
+            ).length > 0 && (
+              <div className="mb-4 space-y-1.5 border-t border-zinc-800 pt-3">
+                <div className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">Key Findings</div>
+                {brief.keyFindings
+                  .filter((f) =>
+                    !f.toLowerCase().includes("— gtm analysis") &&
+                    !f.toLowerCase().includes("— finance analysis") &&
+                    !f.toLowerCase().includes("— security analysis")
+                  )
+                  .slice(0, 6)
+                  .map((f, i) => (
+                    <div key={i} className="flex gap-2.5 text-xs text-zinc-300">
+                      <span className="mt-0.5 shrink-0 font-mono text-[9px] text-zinc-600">{String(i + 1).padStart(2, "0")}</span>
+                      <span className="leading-relaxed">{f.replace(/^\[(?:GTM|FINANCE|SECURITY)\]\s*/i, "")}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* Recommendation */}
+            {brief.recommendation && brief.recommendation !== "Monitor situation and await further intelligence." && (
+              <div className="rounded border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-amber-500">⚡ Recommended Action</div>
+                <p className="text-xs text-zinc-200 leading-relaxed">{brief.recommendation}</p>
+              </div>
+            )}
+          </div>
+        ) : companySignals.length > 0 ? (
+          /* No brief yet but we have signals */
+          <div className="border border-zinc-800 bg-zinc-900/40 p-5">
+            <div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-600 mb-2">Signal Summary · {selectedCompany}</div>
+            <h2 className="font-bold text-base text-zinc-100">
+              {companySignals.length} signals collected · {
+                financeSignals.length > 0 ? financeSignals[0].headline.replace(/^[A-Z]+\s*[\[—][^\]]*[\]:]?\s*/i, "") : "Analysis in progress"
+              }
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500">Executive brief will be generated when the full pipeline completes.</p>
+          </div>
+        ) : null}
+
+        {/* ── Visualizations: Radar + Score Rings ──────────────────────────── */}
+        {companySignals.length > 0 && (() => {
+          const gtmAvg  = gtmSignals.length  > 0 ? Math.round(gtmSignals.reduce((s, x)  => s + x.confidence, 0) / gtmSignals.length  * 100) : 0;
+          const finAvg  = financeSignals.length  > 0 ? Math.round(financeSignals.reduce((s, x)  => s + x.confidence, 0) / financeSignals.length  * 100) : 0;
+          const secAvg  = securitySignals.length > 0 ? Math.round(securitySignals.reduce((s, x) => s + x.confidence, 0) / securitySignals.length * 100) : 0;
+          const composite = riskScore ?? Math.round((gtmAvg + finAvg + secAvg) / 3);
+          const radarData = [
+            { lens: "GTM",      score: gtmAvg,  fullMark: 100 },
+            { lens: "Finance",  score: finAvg,  fullMark: 100 },
+            { lens: "Security", score: secAvg,  fullMark: 100 },
+          ];
+          return (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Radar — lens coverage profile */}
+              <div className="border border-zinc-800 bg-zinc-900/30 p-5">
+                <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">Lens Coverage Profile</div>
+                <div className="mb-2 text-[10px] text-zinc-700">Average signal confidence per lens — higher = stronger evidence base</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <RadarChart cx="50%" cy="50%" data={radarData} outerRadius="68%">
+                    <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                    <PolarAngleAxis
+                      dataKey="lens"
+                      tick={(props: Record<string, unknown>) => {
+                        const x = Number(props["x"]);
+                        const y = Number(props["y"]);
+                        const value = String((props["payload"] as Record<string, unknown>)["value"] ?? "");
+                        const colors: Record<string, string> = { GTM: "#d4a853", Finance: "#34d399", Security: "#f87171" };
+                        return (
+                          <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={colors[value] ?? "#71717a"} fontSize={11} fontFamily="monospace">
+                            {value}
+                          </text>
+                        );
+                      }}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.[0]) return null;
+                        const d = payload[0].payload as typeof radarData[0];
+                        return (
+                          <div className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px]">
+                            <span className="text-zinc-400">{d.lens}:</span>{" "}
+                            <span className="font-mono font-bold text-zinc-100">{d.score}%</span>{" "}
+                            <span className="text-zinc-600">avg confidence</span>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Radar dataKey="score" name="Avg Confidence" stroke="#d4a853" fill="#d4a853" fillOpacity={0.12} strokeWidth={1.5} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Score rings */}
+              <div className="border border-zinc-800 bg-zinc-900/30 p-5">
+                <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">Lens Confidence Scores</div>
+                <div className="mb-4 text-[10px] text-zinc-700">Based on {companySignals.length} collected signals</div>
+                <div className="flex flex-wrap items-center justify-around gap-6 pt-1">
+                  <AuditScoreRing
+                    label="GTM"
+                    score={gtmAvg}
+                    verdict={gtmAvg >= 70 ? "high" : gtmAvg >= 40 ? "medium" : "low"}
+                  />
+                  <AuditScoreRing
+                    label="Finance"
+                    score={finAvg}
+                    verdict={finAvg >= 70 ? "high" : finAvg >= 40 ? "medium" : "low"}
+                  />
+                  <AuditScoreRing
+                    label="Security"
+                    score={secAvg}
+                    verdict={secAvg >= 70 ? "high" : secAvg >= 40 ? "medium" : "low"}
+                  />
+                  <AuditScoreRing
+                    label="Composite"
+                    score={composite}
+                    verdict={composite >= 70 ? "high" : composite >= 40 ? "medium" : "low"}
+                  />
+                </div>
+                {/* Lens signal count breakdown */}
+                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-3">
+                  {(["gtm", "finance", "security"] as const).map((l) => {
+                    const count = l === "gtm" ? gtmSignals.length : l === "finance" ? financeSignals.length : securitySignals.length;
+                    const meta = LENS_META[l];
+                    return (
+                      <div key={l} className="text-center">
+                        <div className="font-mono font-bold text-lg tabular-nums" style={{ color: count > 0 ? meta.color : "#3f3f46" }}>{count}</div>
+                        <div className="text-[9px] uppercase text-zinc-600">{l} signals</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          )}
+          );
+        })()}
 
-          {/* ── Navigation ─────────────────────────────────────────────── */}
-          <div className="flex items-center justify-between border-zinc-800 border-t pt-4">
-            <button
-              className="rounded border border-zinc-700 px-4 py-1.5 text-[10px] text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-30"
-              disabled={selected === 0}
-              onClick={() => setSelected((p) => Math.max(0, p - 1))}
-              type="button"
-            >
-              ← Previous
-            </button>
-            <span className="text-[10px] text-zinc-600">
-              Report {selected + 1} of {briefs.length}
-            </span>
-            <button
-              className="rounded border border-zinc-700 px-4 py-1.5 text-[10px] text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-30"
-              disabled={selected >= briefs.length - 1}
-              onClick={() =>
-                setSelected((p) => Math.min(briefs.length - 1, p + 1))
-              }
-              type="button"
-            >
-              Next →
-            </button>
-          </div>
+        {/* ── 3-Lens Signal Breakdown ───────────────────────────────────────── */}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          {(["gtm", "finance", "security"] as const).map((lens) => {
+            const meta = LENS_META[lens];
+            const lensSignals = lens === "gtm" ? gtmSignals : lens === "finance" ? financeSignals : securitySignals;
+            const topConf = lensSignals.length > 0
+              ? Math.round(lensSignals.reduce((s, x) => s + x.confidence, 0) / lensSignals.length * 100)
+              : 0;
+
+            return (
+              <div
+                key={lens}
+                className="flex flex-col rounded border"
+                style={{ borderColor: meta.border, background: meta.bg }}
+              >
+                {/* Lens header */}
+                <div className="flex items-start justify-between border-b px-4 py-3" style={{ borderColor: meta.border }}>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm" style={{ color: meta.color }}>{meta.icon}</span>
+                      <span className="font-bold text-xs uppercase tracking-wider" style={{ color: meta.color }}>
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[9px] text-zinc-600 leading-snug">{meta.desc}</p>
+                  </div>
+                  <div className="shrink-0 text-right ml-2">
+                    <div className="font-mono font-bold text-lg tabular-nums" style={{ color: lensSignals.length > 0 ? meta.color : "#3f3f46" }}>
+                      {lensSignals.length}
+                    </div>
+                    <div className="text-[9px] text-zinc-600">signals</div>
+                    {topConf > 0 && (
+                      <div className="text-[9px] text-zinc-600">{topConf}% avg conf</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Signal list */}
+                <div className="flex-1 divide-y divide-zinc-800/50 px-4">
+                  {lensSignals.length > 0 ? (
+                    lensSignals.slice(0, 8).map((s) => (
+                      <SignalCard key={s.id} signal={s} color={meta.color} />
+                    ))
+                  ) : (
+                    <div className="py-8 text-center">
+                      <div className="text-zinc-700 text-xs mb-1">No {meta.label} signals</div>
+                      <p className="text-[10px] text-zinc-800 leading-relaxed max-w-[180px] mx-auto">
+                        {lens === "gtm"
+                          ? "Will surface when hiring spikes, product launches, or competitive moves are detected"
+                          : lens === "finance"
+                            ? "Will surface when price movements, filings, or supply chain stress are detected"
+                            : "Will surface when regulatory actions, vendor risk, or key personnel changes are detected"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+
+        {/* ── Signal Confidence Chart ─────────────────────────────────────────── */}
+        {confidenceChart.length > 0 && (
+          <div className="border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
+              Top Signals by Confidence — click a lens column to see the signal
+            </div>
+            <div className="mb-3 flex gap-3 text-[9px]">
+              {(["gtm", "finance", "security"] as const).map((l) => (
+                <div key={l} className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full" style={{ background: LENS_META[l].color }} />
+                  <span className="text-zinc-600 uppercase">{l}</span>
+                </div>
+              ))}
+            </div>
+            <ResponsiveContainer width="100%" height={Math.max(140, confidenceChart.length * 28)}>
+              <BarChart data={confidenceChart} layout="vertical" margin={{ top: 0, right: 48, bottom: 0, left: 0 }}>
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: "#3f3f46", fontSize: 9 }} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="idx" tick={{ fill: "#71717a", fontSize: 9 }} tickLine={false} axisLine={false} width={24} />
+                <Tooltip
+                  cursor={{ fill: "rgba(255,255,255,0.02)" }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null;
+                    const d = payload[0].payload as (typeof confidenceChart)[0];
+                    return (
+                      <div className="max-w-xs rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px]">
+                        <div
+                          className="mb-1 text-[9px] uppercase font-bold"
+                          style={{ color: LENS_META[d.lens as keyof typeof LENS_META]?.color ?? "#71717a" }}
+                        >
+                          {d.lens}
+                        </div>
+                        <div className="text-zinc-200 leading-snug">{d.label}</div>
+                        <div className="mt-1 font-mono text-zinc-400">{d.confidence}% confidence</div>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="confidence" radius={[0, 3, 3, 0]}>
+                  {confidenceChart.map((e, i) => (
+                    <Cell
+                      key={i}
+                      fill={LENS_META[e.lens as keyof typeof LENS_META]?.color ?? "#71717a"}
+                      fillOpacity={0.75}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* ── Source Evidence ─────────────────────────────────────────────────── */}
+        {companySignals.length > 0 && (() => {
+          const allSources = [...new Set(
+            companySignals.flatMap((s) => s.source_urls).filter(Boolean)
+          )].slice(0, 16);
+          return allSources.length > 0 ? (
+            <div className="border border-zinc-800 bg-zinc-900/30 p-4">
+              <div className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-zinc-600">
+                Evidence Sources · {allSources.length} domains
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {allSources.map((url, i) => {
+                  const sig = companySignals.find((s) => s.source_urls.includes(url));
+                  const color = sig ? LENS_META[sig.lens]?.color : "#71717a";
+                  return (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[9px] text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-200"
+                      title={url}
+                      style={{ borderLeftColor: color, borderLeftWidth: "2px" }}
+                    >
+                      {safeHostname(url)}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null;
+        })()}
+
+      </div>
     </div>
   );
 }
