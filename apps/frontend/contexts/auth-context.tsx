@@ -59,7 +59,8 @@ async function fetchMe(): Promise<AuthUser | null> {
     }
     const data = await res.json();
     return data.user ?? null;
-  } catch {
+  } catch (err) {
+    console.error("[Auth] fetchMe failed:", err);
     return null;
   }
 }
@@ -76,31 +77,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error ?? "Login failed");
+    console.log(`[Auth] Attempting login for ${email}`);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error(`[Auth] Login failed. Status: ${res.status}. Response wasn't JSON:`, text.slice(0, 100));
+        throw new Error(`Server returned ${res.status} (Not JSON). Is the API URL correct?`);
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error ?? `Login failed with status ${res.status}`);
+      }
+      setToken(data.token);
+      setUser(data.user);
+      console.log(`[Auth] Login successful for ${email}`);
+    } catch (err) {
+      console.error("[Auth] Login exception:", err);
+      throw err;
     }
-    setToken(data.token);
-    setUser(data.user);
   }
 
   async function register(email: string, password: string, name: string) {
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, name }),
-    });
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error ?? "Registration failed");
+    console.log(`[Auth] Attempting register for ${email}`);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name }),
+      });
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error(`[Auth] Register failed. Status: ${res.status}. Response wasn't JSON:`, text.slice(0, 100));
+        throw new Error(`Server returned ${res.status} (Not JSON). Is the API URL correct?`);
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error ?? `Registration failed with status ${res.status}`);
+      }
+      setToken(data.token);
+      setUser(data.user);
+      console.log(`[Auth] Registration successful for ${email}`);
+    } catch (err) {
+      console.error("[Auth] Register exception:", err);
+      throw err;
     }
-    setToken(data.token);
-    setUser(data.user);
   }
 
   function logout() {
