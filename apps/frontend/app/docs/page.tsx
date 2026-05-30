@@ -1,8 +1,8 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Footer from "@/components/footer";
-import LandingNav from "@/components/landing-nav";
+import Footer from "@/components/footer.tsx";
+import LandingNav from "@/components/landing-nav.tsx";
 
 /* ΓöÇΓöÇΓöÇ Sidebar Section Data ΓöÇΓöÇΓöÇ */
 const sidebarSections = [
@@ -505,13 +505,17 @@ export default function DocsPage() {
   };
 
   return (
-    <div style={{
-        background: "#0A0F0D",
-        minHeight: "100vh",
-        "--font-serif": "var(--font-instrument-serif)",
-        "--font-sans": "var(--font-instrument-sans)",
-        "--font-mono": "var(--font-jetbrains-mono)",
-      } as React.CSSProperties}>
+    <div
+      style={
+        {
+          background: "#0A0F0D",
+          minHeight: "100vh",
+          "--font-serif": "var(--font-instrument-serif)",
+          "--font-sans": "var(--font-instrument-sans)",
+          "--font-mono": "var(--font-jetbrains-mono)",
+        } as React.CSSProperties
+      }
+    >
       <LandingNav />
 
       {/* Page wrapper */}
@@ -676,8 +680,8 @@ export default function DocsPage() {
               </span>{" "}
               (Finance), and a{" "}
               <span style={{ color: "#DA5B5B" }}>vendor stability signal</span>{" "}
-              (Security) ΓÇö stored once in the Cognee memory graph, queried three
-              ways.
+              (Security) ΓÇö stored once in the Cognee memory graph, queried
+              three ways.
             </p>
           </div>
           <p style={pStyle}>
@@ -1283,8 +1287,8 @@ curl http://localhost:3001/health`}
             Argus uses the Cognee knowledge graph as both persistent agent
             memory and a scrape cache. Every piece of collected data is stored
             as a node in the graph, cross-referenced by source, agent,
-            timestamp, and confidence ΓÇö enabling correlation queries across all
-            agents.
+            timestamp, and confidence ΓÇö enabling correlation queries across
+            all agents.
           </p>
 
           <SectionHeading id="cognee-ops" level={3}>

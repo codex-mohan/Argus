@@ -389,3 +389,12 @@ export function getStateStats(): {
     memoryCacheSize: 0, // Populated by cache.ts
   };
 }
+
+// ─── Reset ─────────────────────────────────────────────────────────────────
+
+export function clearAllData(): void {
+  db.run("DELETE FROM signals");
+  db.run("DELETE FROM briefs");
+  db.run("DELETE FROM steps");
+  db.run("UPDATE runs SET status = 'cancelled' WHERE status = 'running'");
+}

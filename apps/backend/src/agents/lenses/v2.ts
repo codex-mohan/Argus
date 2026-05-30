@@ -10,7 +10,6 @@
 
 import { DATASETS } from "@argus/shared";
 import { Agent, defineTool } from "@mohanscodex/spectra-agent";
-import type { ToolResult } from "@mohanscodex/spectra-agent";
 import { z } from "zod";
 import { resolveAgentModel } from "../../config/store.ts";
 import type {
@@ -113,9 +112,7 @@ const LensFindingSchema = z.object({
     .describe(
       "3-5 specific findings from the data, each with a concrete data point"
     ),
-  sourceUrls: z
-    .array(z.string().url())
-    .describe("URLs cited in the analysis"),
+  sourceUrls: z.array(z.string().url()).describe("URLs cited in the analysis"),
 });
 
 type LensFindingResult = z.infer<typeof LensFindingSchema>;
@@ -236,7 +233,10 @@ You MUST call the submit_analysis tool. Do NOT write a text response.`;
 
   // 4. LLM Analysis
   // Fallback: use best fact claim as headline if LLM doesn't respond
-  const topFact = facts.reduce((best, f) => f.confidence > best.confidence ? f : best, facts[0]!);
+  const topFact = facts.reduce(
+    (best, f) => (f.confidence > best.confidence ? f : best),
+    facts[0]!
+  );
   let headline = topFact
     ? `${company} [${lens.toUpperCase()}]: ${topFact.claim.slice(0, 100)}`
     : `${company} — ${lens.toUpperCase()} analysis`;
@@ -260,7 +260,9 @@ You MUST call the submit_analysis tool. Do NOT write a text response.`;
       parameters: LensFindingSchema,
       execute: async (args) => {
         captured = args;
-        return { content: [{ type: "text" as const, text: "Analysis recorded." }] };
+        return {
+          content: [{ type: "text" as const, text: "Analysis recorded." }],
+        };
       },
     });
 

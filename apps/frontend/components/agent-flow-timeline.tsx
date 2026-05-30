@@ -105,16 +105,24 @@ const PIPELINE_ORDER = [
 ];
 
 function statusIcon(status: StepEvent["status"]): string {
-  if (status === "running") return "●";
-  if (status === "success") return "✓";
-  if (status === "failed") return "✗";
+  if (status === "running") {
+    return "●";
+  }
+  if (status === "success") {
+    return "✓";
+  }
+  if (status === "failed") {
+    return "✗";
+  }
   return "–";
 }
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) {
+    return `${s}s ago`;
+  }
   return `${Math.floor(s / 60)}m ago`;
 }
 
@@ -143,14 +151,14 @@ export function AgentFlowTimeline({
           };
           return (
             <div
-              key={agentId}
               className="flex items-center gap-3 rounded border border-zinc-800 px-3 py-2 opacity-40"
+              key={agentId}
             >
-              <span className="text-sm w-5 text-center">{meta.icon}</span>
-              <div className="flex-1 min-w-0">
+              <span className="w-5 text-center text-sm">{meta.icon}</span>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span
-                    className="font-mono text-[10px] font-bold uppercase tracking-wide"
+                    className="font-bold font-mono text-[10px] uppercase tracking-wide"
                     style={{ color: meta.color }}
                   >
                     {agentId}
@@ -159,7 +167,7 @@ export function AgentFlowTimeline({
                     {meta.category}
                   </span>
                 </div>
-                <div className="text-[10px] text-zinc-600 mt-0.5">
+                <div className="mt-0.5 text-[10px] text-zinc-600">
                   Waiting for pipeline run…
                 </div>
               </div>
@@ -192,8 +200,8 @@ export function AgentFlowTimeline({
 
         return (
           <div
-            key={agentId}
             className="rounded border transition-all"
+            key={agentId}
             style={{
               borderColor: isRunning
                 ? meta.color + "40"
@@ -205,31 +213,31 @@ export function AgentFlowTimeline({
           >
             <div className="flex items-start gap-3 px-3 py-2.5">
               {/* Icon */}
-              <span className="text-sm mt-0.5 w-5 text-center shrink-0">
+              <span className="mt-0.5 w-5 shrink-0 text-center text-sm">
                 {meta.icon}
               </span>
 
               {/* Content */}
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 {/* Header row */}
-                <div className="flex items-center gap-2 mb-1">
+                <div className="mb-1 flex items-center gap-2">
                   <span
-                    className="font-mono text-[10px] font-bold uppercase tracking-wide"
+                    className="font-bold font-mono text-[10px] uppercase tracking-wide"
                     style={{ color: meta.color }}
                   >
                     {agentId}
                   </span>
-                  <span className="text-[9px] text-zinc-700 uppercase tracking-widest shrink-0">
+                  <span className="shrink-0 text-[9px] text-zinc-700 uppercase tracking-widest">
                     {meta.category}
                   </span>
                   {isRunning && (
                     <span
-                      className="inline-block h-1.5 w-1.5 animate-pulse rounded-full shrink-0"
+                      className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
                       style={{ background: meta.color }}
                     />
                   )}
                   <span
-                    className={`ml-auto shrink-0 text-[10px] font-mono ${
+                    className={`ml-auto shrink-0 font-mono text-[10px] ${
                       isFailed
                         ? "text-red-400"
                         : isRunning
@@ -245,14 +253,14 @@ export function AgentFlowTimeline({
 
                 {/* Step label — this is the phase name like "Search", "Scrape", "Analyze" */}
                 <div
-                  className="text-xs font-semibold mb-0.5"
+                  className="mb-0.5 font-semibold text-xs"
                   style={{ color: isRunning ? "#e4e4e7" : "#a1a1aa" }}
                 >
                   {latest.label}
                 </div>
 
                 {/* Detail — this is where the actual content goes */}
-                <div className="text-[11px] text-zinc-400 leading-snug break-words">
+                <div className="break-words text-[11px] text-zinc-400 leading-snug">
                   {latest.detail}
                 </div>
 

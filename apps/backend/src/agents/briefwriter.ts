@@ -26,8 +26,8 @@ The HEADLINE must contain: company name + a specific number/date/percentage + an
 Do NOT use vague phrases like "Multiple intelligence lenses have converged".`;
 }
 
-import { Agent, defineTool } from "@mohanscodex/spectra-agent";
 import type { ToolResult } from "@mohanscodex/spectra-agent";
+import { Agent, defineTool } from "@mohanscodex/spectra-agent";
 import { z } from "zod";
 import { resolveAgentModel } from "../config/store.ts";
 import type {
@@ -50,7 +50,7 @@ const BriefSchema = z.object({
   summary: z
     .string()
     .describe(
-      "2-3 paragraphs. P1: what happened (cite GTM/Finance/Security by name with specific numbers). P2: cross-lens synthesis — what does it mean together. P3 optional: what to watch."
+      "Comprehensive 3-paragraph analysis providing a PROPER DESCRIPTION AND ANALYSIS. P1: Deep description of events (cite GTM/Finance/Security by name with specific numbers). P2: Cross-lens analytical synthesis — what does it mean together and what are the deeper implications. P3: Strategic outlook and specific catalysts/dates to watch."
     ),
   keyFindings: z
     .array(z.string())
@@ -75,14 +75,14 @@ type BriefResult = z.infer<typeof BriefSchema>;
 on("convergence_detected", async (event: ConvergenceDetected) => {
   const { runId, company, signals, compositeScore, contradictions } = event;
 
-  // Only write briefs for actual convergences (not contradictions or insufficient)
-  if (event.verdict !== "converged" || compositeScore < 60) {
+  // Write briefs for any meaningful convergence
+  if (event.verdict === "insufficient") {
     emitStep(
       runId,
       "brief-writer",
       1,
       "Skip",
-      `Skipping brief for ${company}: ${event.verdict} (score ${compositeScore})`,
+      `Skipping brief for ${company}: insufficient signals (score ${compositeScore})`,
       "skipped",
       100
     );
@@ -99,11 +99,45 @@ on("convergence_detected", async (event: ConvergenceDetected) => {
     50
   );
 
-  // Build prompt from signals
-  const signalsText = signals
-    .map(
-      (s: LensFinding, i: number) =>
-        `[Signal ${i + 1}] ${s.headline}\nSynthesis: ${s.synthesis}\nConfidence: ${s.confidence}\nSources: ${s.sourceUrls.join(", ")}`
+  // Build a grouped signal context so the LLM can cite each lens
+  const lensTagFromSignal = (
+    sig: LensFinding
+  ): "gtm" | "finance" | "security" => {
+    const text = (sig.headline + " " + sig.synthesis).toLowerCase();
+    if (
+      text.includes("[gtm]") ||
+      text.includes("gtm lens") ||
+      text.includes("hiring") ||
+      text.includes("competitor")
+    ) {
+      return "gtm";
+    }
+    if (
+      text.includes("[security]") ||
+      text.includes("security lens") ||
+      text.includes("regulatory") ||
+      text.includes("vendor risk")
+    ) {
+      return "security";
+    }
+    return "finance";
+  };
+
+  const groupedByLens = signals.reduce(
+    (acc: Record<string, LensFinding[]>, s: LensFinding) => {
+      const tag = lensTagFromSignal(s);
+      (acc[tag] = acc[tag] ?? []).push(s);
+      return acc;
+    },
+    {} as Record<string, LensFinding[]>
+  );
+
+  const signalsText = (["gtm", "finance", "security"] as const)
+    .flatMap((lens) =>
+      (groupedByLens[lens] ?? []).map(
+        (s: LensFinding, i: number) =>
+          `[${lens.toUpperCase()} Signal ${i + 1}]\nHeadline: ${s.headline}\nSynthesis: ${s.synthesis}\nConfidence: ${Math.round(s.confidence * 100)}%\nSources: ${s.sourceUrls.slice(0, 2).join(", ") || "none"}`
+      )
     )
     .join("\n\n");
 
@@ -112,19 +146,69 @@ on("convergence_detected", async (event: ConvergenceDetected) => {
       ? `\n\nCONTRADICTIONS DETECTED:\n${contradictions.map((c: Contradiction) => `- ${c.lensA} vs ${c.lensB}: ${c.description} (${c.severity})`).join("\n")}`
       : "";
 
-  const prompt = `Write a substantive executive intelligence brief for ${company}. Use specific numbers, names, dates, and figures from the signal data below. Every claim must be grounded in evidence.
+  const prompt = `CRITICAL INSTRUCTION: You MUST call the submit_brief tool. Do NOT write a text response — only a tool call is accepted.
 
-CORRELATED SIGNALS:
-${signalsText}${contradictionText}
+Write a highly analytical executive intelligence brief for ${company} using the signal data below. The report MUST contain a proper, deep description and analysis of the situation. Every sentence must reference specific numbers, dates, or named facts from the signals. Do not just summarize; analyze the deeper strategic meaning of these combined signals.
 
 COMPOSITE RISK SCORE: ${compositeScore}/100
 
-Be specific: if a signal mentions $942, say $942. If hiring increased 15%, say 15%. Cite which lens (GTM/Finance/Security) found each finding.
+SIGNALS BY LENS:
+${signalsText}${contradictionText}
 
-You MUST call the submit_brief tool. Do NOT write a text response.`;
+REQUIREMENTS:
+- summary.P1: Comprehensive description of what is happening financially/competitively (use specific numbers from Finance + GTM lens)
+- summary.P2: Analytical synthesis — why it matters, what the deeper implications are, and how the lens findings corroborate or contradict each other
+- summary.P3: Strategic outlook — what specific catalysts, dates, or upcoming events to watch next
+- keyFindings: at least one [GTM], one [FINANCE], one [SECURITY] finding with a number and source
+- headline: must contain company name + a specific number/percentage/date + an action verb
 
-  let headline = `${company} Intelligence Brief`;
-  let summary = `Multiple intelligence lenses have converged on signals for ${company}.`;
+Call submit_brief NOW. Failure to call the tool is unacceptable.`;
+
+  // Inline fallback summary built from real signal data (used if LLM fails to call the tool)
+  const fallbackSummary = (() => {
+    const clean = (s: string) =>
+      s
+        .replace(/\s*—\s*Source:\s*https?:\/\/\S+/g, "")
+        .replace(/^\[(?:GTM|FINANCE|SECURITY)\]\s*/i, "")
+        .trim();
+    const topFin = (groupedByLens["finance"] ?? []).sort(
+      (a: LensFinding, b: LensFinding) => b.confidence - a.confidence
+    )[0];
+    const topGtm = (groupedByLens["gtm"] ?? []).sort(
+      (a: LensFinding, b: LensFinding) => b.confidence - a.confidence
+    )[0];
+    const topSec = (groupedByLens["security"] ?? []).sort(
+      (a: LensFinding, b: LensFinding) => b.confidence - a.confidence
+    )[0];
+    const parts: string[] = [];
+    if (topFin?.synthesis && topFin.synthesis !== topFin.headline) {
+      parts.push(clean(topFin.synthesis));
+    }
+    if (topGtm?.synthesis && topGtm.synthesis !== topGtm.headline) {
+      parts.push(clean(topGtm.synthesis));
+    }
+    if (topSec?.synthesis && topSec.synthesis !== topSec.headline) {
+      parts.push(clean(topSec.synthesis));
+    }
+    if (parts.length === 0) {
+      signals.forEach((s: LensFinding) => parts.push(clean(s.headline)));
+    }
+    return parts.slice(0, 3).join("\n\n");
+  })();
+
+  const fallbackHeadline = (() => {
+    const best = [...signals].sort(
+      (a: LensFinding, b: LensFinding) => b.confidence - a.confidence
+    )[0];
+    return best
+      ? best.headline
+          .replace(/^\[(?:GTM|FINANCE|SECURITY)\]\s*/i, "")
+          .slice(0, 120)
+      : `${company} Intelligence Brief`;
+  })();
+
+  let headline = fallbackHeadline;
+  let summary = fallbackSummary;
   let keyFindings: string[] = signals.map((s: LensFinding) => s.headline);
   let riskScore = compositeScore;
   let recommendation = "Monitor situation and await further intelligence.";
@@ -147,7 +231,7 @@ You MUST call the submit_brief tool. Do NOT write a text response.`;
       model: resolveAgentModel("brief-writer"),
       systemPrompt: briefWriterSystemPrompt,
       tools: [submitBriefTool],
-      maxTurns: 2,
+      maxTurns: 6,
       toolExecution: "sequential",
     });
 
@@ -172,8 +256,9 @@ You MUST call the submit_brief tool. Do NOT write a text response.`;
       });
     } else {
       console.warn(
-        "[brief-writer] tool not called — using signal headlines as fallback"
+        "[brief-writer] tool not called — using inline signal synthesis as fallback"
       );
+      // fallbackSummary and fallbackHeadline are already set above
     }
   } catch (err) {
     console.error("[brief-writer] LLM failed:", err);
@@ -197,28 +282,6 @@ You MUST call the submit_brief tool. Do NOT write a text response.`;
   );
   // Map from LensFinding back to a lens tag — use the agent_id embedded in citedFactIds or fall back to finance
   // The correlated signals come from LensAnalysisComplete events which carry the lens name in their headline/synthesis
-  const lensTagFromSignal = (
-    sig: LensFinding
-  ): "gtm" | "finance" | "security" => {
-    const text = (sig.headline + " " + sig.synthesis).toLowerCase();
-    if (
-      text.includes("[gtm]") ||
-      text.includes("gtm lens") ||
-      text.includes("hiring") ||
-      text.includes("competitor")
-    ) {
-      return "gtm";
-    }
-    if (
-      text.includes("[security]") ||
-      text.includes("security lens") ||
-      text.includes("regulatory") ||
-      text.includes("vendor risk")
-    ) {
-      return "security";
-    }
-    return "finance";
-  };
   const primaryLens = lensTagFromSignal(dominantLens);
 
   // Persist

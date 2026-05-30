@@ -159,6 +159,9 @@ export async function triggerReplay(scenario: string): Promise<void> {
 
 export function useSignalStream() {
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [steps, setSteps] = useState<StepEvent[]>([]);
+  const [convergence, setConvergence] = useState<ConvergenceEvent | null>(null);
+  const [brief, setBrief] = useState<BriefEvent | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
@@ -190,14 +193,47 @@ export function useSignalStream() {
       }
       try {
         const data = JSON.parse(event.data);
-        if (
-          data.type === "lens_analysis_complete" ||
-          data.type === "convergence_detected" ||
-          data.type === "brief_ready"
-        ) {
-          // These events may also carry signals — ignore for signal list
+
+        if (data.type === "step_emitted") {
+          const step: StepEvent = {
+            agentId: data.agentId,
+            step: data.step,
+            label: data.label,
+            detail: data.detail,
+            status: data.status,
+            progress: data.progress,
+            timestamp: data.timestamp,
+            lens: data.lens,
+          };
+          setSteps((prev) => [...prev, step].slice(-200));
           return;
         }
+
+        if (data.type === "convergence_detected") {
+          const conv: ConvergenceEvent = {
+            company: data.company,
+            compositeScore: data.compositeScore,
+            verdict: data.verdict,
+            signals: data.signals,
+            contradictions: data.contradictions,
+          };
+          setConvergence(conv);
+          return;
+        }
+
+        if (data.type === "brief_ready") {
+          const b: BriefEvent = {
+            company: data.company,
+            brief: data.brief,
+          };
+          setBrief(b);
+          return;
+        }
+
+        if (data.type === "lens_analysis_complete") {
+          return;
+        }
+
         if (data.headline && data.lens) {
           const signal: Signal = data;
           setSignals((prev) => [signal, ...prev].slice(0, 200));
@@ -227,7 +263,7 @@ export function useSignalStream() {
     };
   }, [init]);
 
-  return { signals, connected, error };
+  return { signals, steps, convergence, brief, connected, error };
 }
 
 export async function fetchModels(): Promise<
@@ -337,70 +373,7 @@ export async function updatePipelineConfig(
   }
 }
 
-export function useEventStream() {
-  const [steps, setSteps] = useState<StepEvent[]>([]);
-  const [convergence, setConvergence] = useState<ConvergenceEvent | null>(null);
-  const [brief, setBrief] = useState<BriefEvent | null>(null);
-  const [connected, setConnected] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    const es = new EventSource(`${API_BASE}/api/signals/stream`);
-    esRef.current = es;
-
-    es.onopen = () => setConnected(true);
-
-    es.onmessage = (event) => {
-      if (!event.data || event.data.startsWith(":")) {
-        return;
-      }
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "step_emitted") {
-          const step: StepEvent = {
-            agentId: data.agentId,
-            step: data.step,
-            label: data.label,
-            detail: data.detail,
-            status: data.status,
-            progress: data.progress,
-            timestamp: data.timestamp,
-            lens: data.lens,
-          };
-          setSteps((prev) => [...prev, step].slice(-100));
-        }
-
-        if (data.type === "convergence_detected") {
-          const conv: ConvergenceEvent = {
-            company: data.company,
-            compositeScore: data.compositeScore,
-            verdict: data.verdict,
-            signals: data.signals,
-            contradictions: data.contradictions,
-          };
-          setConvergence(conv);
-        }
-
-        if (data.type === "brief_ready") {
-          const b: BriefEvent = {
-            company: data.company,
-            brief: data.brief,
-          };
-          setBrief(b);
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    es.onerror = () => setConnected(false);
-
-    return () => es.close();
-  }, []);
-
-  return { steps, convergence, brief, connected };
-}
+// useEventStream merged into useSignalStream
 
 export function useAgentStatus(pollMs = 5000) {
   const [agents, setAgents] = useState<AgentStatus[]>([]);

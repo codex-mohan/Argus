@@ -9,7 +9,7 @@ const AGENT_COLORS: Record<string, string> = {
   "social-data-bot": "#f472b6",
   "supplier-data-bot": "#fbbf24",
   "filing-data-bot": "#22d3ee",
-  "normalizer": "#a78bfa",
+  normalizer: "#a78bfa",
   "gtm-lens": "#d4a853",
   "finance-lens": "#34d399",
   "security-lens": "#f87171",
@@ -40,8 +40,8 @@ function formatTs(iso: string): string {
 }
 
 interface Props {
-  steps: StepEvent[];
   maxLines?: number;
+  steps: StepEvent[];
 }
 
 export function LiveTerminal({ steps, maxLines = 200 }: Props) {
@@ -60,7 +60,9 @@ export function LiveTerminal({ steps, maxLines = 200 }: Props) {
   // Detect when user scrolls up → pause
   function handleScroll() {
     const el = containerRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     setPaused(!atBottom);
   }
@@ -80,7 +82,9 @@ export function LiveTerminal({ steps, maxLines = 200 }: Props) {
             <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
           </span>
-          <span className="font-mono text-[10px] text-zinc-500">argus-run — live terminal</span>
+          <span className="font-mono text-[10px] text-zinc-500">
+            argus-run — live terminal
+          </span>
           {steps.length > 0 && (
             <span className="font-mono text-[10px] text-zinc-700">
               [{steps.length} events]
@@ -91,22 +95,24 @@ export function LiveTerminal({ steps, maxLines = 200 }: Props) {
           {/* Agent filter */}
           <select
             className="rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-400 focus:outline-none"
-            value={filter}
             onChange={(e) => setFilter(e.target.value)}
+            value={filter}
           >
             <option value="all">all agents</option>
             {allAgents.map((a) => (
-              <option key={a} value={a}>{a}</option>
+              <option key={a} value={a}>
+                {a}
+              </option>
             ))}
           </select>
           {paused && (
             <button
-              type="button"
+              className="rounded border border-amber-700/50 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-400 transition-colors hover:bg-amber-500/20"
               onClick={() => {
                 setPaused(false);
                 bottomRef.current?.scrollIntoView({ behavior: "smooth" });
               }}
-              className="rounded border border-amber-700/50 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-400 hover:bg-amber-500/20 transition-colors"
+              type="button"
             >
               ↓ Resume
             </button>
@@ -116,25 +122,27 @@ export function LiveTerminal({ steps, maxLines = 200 }: Props) {
 
       {/* Terminal body */}
       <div
-        ref={containerRef}
-        onScroll={handleScroll}
         className="h-72 overflow-y-auto font-mono text-[11px] leading-relaxed"
+        onScroll={handleScroll}
+        ref={containerRef}
         style={{ background: "rgba(0,0,0,0.6)" }}
       >
         {visible.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-700">
             <div className="text-xs">$ waiting for pipeline events…</div>
-            <div className="text-[10px] animate-pulse">Trigger a run to see live output</div>
+            <div className="animate-pulse text-[10px]">
+              Trigger a run to see live output
+            </div>
           </div>
         ) : (
-          <div className="px-3 py-2 space-y-0.5">
+          <div className="space-y-0.5 px-3 py-2">
             {visible.map((step, i) => {
               const color = AGENT_COLORS[step.agentId] ?? "#71717a";
               const statusColor = STATUS_COLORS[step.status] ?? "#71717a";
               const icon = STATUS_ICONS[step.status] ?? "·";
 
               return (
-                <div key={i} className="flex gap-2 group">
+                <div className="group flex gap-2" key={i}>
                   {/* Timestamp */}
                   <span className="shrink-0 text-zinc-700 tabular-nums">
                     {formatTs(step.timestamp)}
@@ -149,10 +157,7 @@ export function LiveTerminal({ steps, maxLines = 200 }: Props) {
                   </span>
 
                   {/* Agent ID */}
-                  <span
-                    className="shrink-0 font-bold"
-                    style={{ color }}
-                  >
+                  <span className="shrink-0 font-bold" style={{ color }}>
                     [{step.agentId}]
                   </span>
 
@@ -175,7 +180,7 @@ export function LiveTerminal({ steps, maxLines = 200 }: Props) {
                   </span>
 
                   {/* Progress */}
-                  <span className="shrink-0 tabular-nums text-zinc-700">
+                  <span className="shrink-0 text-zinc-700 tabular-nums">
                     {step.progress}%
                   </span>
                 </div>

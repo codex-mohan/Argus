@@ -4,8 +4,8 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Image from "next/image";
 import { useEffect, useRef } from "react";
-import Footer from "@/components/footer";
-import LandingNav from "@/components/landing-nav";
+import Footer from "@/components/footer.tsx";
+import LandingNav from "@/components/landing-nav.tsx";
 
 /* ============================================
    ARGUS LANDING PAGE
@@ -292,14 +292,16 @@ export default function Home() {
   return (
     <div
       ref={containerRef}
-      style={{
-        background: "#0A0F0D",
-        minHeight: "100vh",
-        overflowX: "hidden",
-        "--font-serif": "var(--font-instrument-serif)",
-        "--font-sans": "var(--font-instrument-sans)",
-        "--font-mono": "var(--font-jetbrains-mono)",
-      } as React.CSSProperties}
+      style={
+        {
+          background: "#0A0F0D",
+          minHeight: "100vh",
+          overflowX: "hidden",
+          "--font-serif": "var(--font-instrument-serif)",
+          "--font-sans": "var(--font-instrument-sans)",
+          "--font-mono": "var(--font-jetbrains-mono)",
+        } as React.CSSProperties
+      }
     >
       <LandingNav />
 
@@ -704,17 +706,15 @@ export default function Home() {
                   );
                 })}
                 {Array.from({ length: Math.max(0, 8 - word.length) }).map(
-                  (_, fi) => {
-                    return (
-                      <div
-                        className="scramble-cell scramble-cell-anim scramble-cell-dim"
-                        key={`fill-${word}-${fi}`}
-                        style={{ opacity: 0 }}
-                      >
-                        {String.fromCharCode(65 + ((wi * 3 + fi) % 26))}
-                      </div>
-                    );
-                  }
+                  (_, fi) => (
+                    <div
+                      className="scramble-cell scramble-cell-anim scramble-cell-dim"
+                      key={`fill-${word}-${fi}`}
+                      style={{ opacity: 0 }}
+                    >
+                      {String.fromCharCode(65 + ((wi * 3 + fi) % 26))}
+                    </div>
+                  )
                 )}
               </div>
             ))}

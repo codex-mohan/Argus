@@ -158,8 +158,8 @@ function computeCompositeScore(
     0
   );
 
-  // Minimum threshold: each lens must score > 60 to count
-  const validLenses = findings.filter((f) => f.score >= 60);
+  // Minimum threshold: each lens must score >= 40 to count
+  const validLenses = findings.filter((f) => f.score >= 40);
   if (validLenses.length < 2) {
     return Math.round(weightedAvg * 0.5); // Heavy penalty for low-quality signals
   }
@@ -260,7 +260,7 @@ on("lens_analysis_complete", async (event: LensAnalysisComplete) => {
     let verdict: ConvergenceDetected["verdict"] = "insufficient";
     if (contradictions.length > 0) {
       verdict = "contradicted";
-    } else if (compositeScore >= 60) {
+    } else if (compositeScore >= 40) {
       verdict = "converged";
     }
 
@@ -284,7 +284,10 @@ on("lens_analysis_complete", async (event: LensAnalysisComplete) => {
         (best, f) => (f.confidence > best.confidence ? f : best),
         deduped[0]!
       );
-      const dominantLens = dominantFinding.lens as "gtm" | "finance" | "security";
+      const dominantLens = dominantFinding.lens as
+        | "gtm"
+        | "finance"
+        | "security";
 
       // Build a meaningful headline from the actual lens findings
       // e.g. "NVIDIA: [GTM] 340 AI engineer roles posted in Austin — corroborated by Finance + Security lenses"
@@ -299,11 +302,15 @@ on("lens_analysis_complete", async (event: LensAnalysisComplete) => {
 
       // Build synthesis from all lens findings
       const lensSnippets = deduped
-        .map((f) => `[${f.lens.toUpperCase()}] ${f.finding.synthesis.split('.')[0]}.`)
-        .join(' ');
-      const correlationSynthesis = contradictions.length > 0
-        ? `${lensSnippets} CONFLICT: ${contradictions.map((c) => c.description).join('; ')}.`
-        : lensSnippets;
+        .map(
+          (f) =>
+            `[${f.lens.toUpperCase()}] ${f.finding.synthesis.split(".")[0]}.`
+        )
+        .join(" ");
+      const correlationSynthesis =
+        contradictions.length > 0
+          ? `${lensSnippets} CONFLICT: ${contradictions.map((c) => c.description).join("; ")}.`
+          : lensSnippets;
 
       persistSignal({
         id: `corr_${runId}_${Date.now()}`,

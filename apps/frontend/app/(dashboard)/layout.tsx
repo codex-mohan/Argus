@@ -9,7 +9,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <RouteGuard>
       <div className="flex h-screen overflow-hidden bg-base">
         <Sidebar />
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          {children}
+        </main>
       </div>
     </RouteGuard>
   );

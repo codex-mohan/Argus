@@ -49,6 +49,7 @@ import {
 } from "./pipeline.ts";
 import { registerAimlApiProvider } from "./providers/aimlapi.ts";
 import {
+  clearAllData,
   getAgentStatuses,
   getBriefsForCompany,
   getSignals,
@@ -752,6 +753,20 @@ async function main() {
       "/api/cache/clear": () => {
         clearMemoryCache();
         return jsonResponse({ success: true, message: "Memory cache cleared" });
+      },
+
+      "/api/reset": (req: Request) => {
+        if (req.method !== "POST") {
+          return jsonResponse({ error: "POST only" }, 405);
+        }
+        clearAllData();
+        clearMemoryCache();
+        console.log("[reset] All signals, briefs and steps cleared");
+        return jsonResponse({
+          success: true,
+          message:
+            "All signals, briefs and cache cleared. Ready for fresh run.",
+        });
       },
     },
 

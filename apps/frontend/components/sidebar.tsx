@@ -1,8 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import {
   Bot,
   FileBarChart2,
@@ -11,16 +8,19 @@ import {
   Radio,
   Settings2,
 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context.tsx";
 import { useSignalStream } from "@/lib/api.ts";
 
 const NAV_ITEMS = [
-  { label: "Dashboard",  href: "/dashboard", Icon: LayoutDashboard },
-  { label: "Chat",       href: "/chat",      Icon: MessageSquare   },
-  { label: "Agents",     href: "/agents",    Icon: Bot             },
-  { label: "Signals",    href: "/signals",   Icon: Radio           },
-  { label: "Reports",    href: "/reports",   Icon: FileBarChart2   },
-  { label: "Settings",   href: "/settings",  Icon: Settings2       },
+  { label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard },
+  { label: "Chat", href: "/chat", Icon: MessageSquare },
+  { label: "Agents", href: "/agents", Icon: Bot },
+  { label: "Signals", href: "/signals", Icon: Radio },
+  { label: "Reports", href: "/reports", Icon: FileBarChart2 },
+  { label: "Settings", href: "/settings", Icon: Settings2 },
 ];
 
 export function Sidebar() {
