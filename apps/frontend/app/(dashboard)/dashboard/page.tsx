@@ -209,7 +209,7 @@ function MiniCard({
 
 // ─── Watchlist Widget ─────────────────────────────────────────────────────────
 
-function WatchlistWidget({ demoMode }: { demoMode: string }) {
+function WatchlistWidget() {
   const { companies, add, remove, loading } = useWatchlist();
   const [input, setInput] = useState("");
   const [runningCompany, setRunningCompany] = useState<string | null>(null);
@@ -227,7 +227,7 @@ function WatchlistWidget({ demoMode }: { demoMode: string }) {
   async function handleRun(company: string) {
     setRunningCompany(company);
     try {
-      await triggerRun(company, demoMode);
+      await triggerRun(company, "live");
     } catch {}
     setTimeout(() => setRunningCompany(null), 4000);
   }
@@ -875,7 +875,7 @@ export default function DashboardPage() {
         <div className="hidden min-w-0 flex-col gap-0 divide-y divide-zinc-800 xl:flex">
           {/* Watchlist */}
           <div className="px-4 py-3">
-            <WatchlistWidget demoMode={demoMode} />
+            <WatchlistWidget />
           </div>
 
           {/* Agent pipeline status — compact 2-col grid */}
