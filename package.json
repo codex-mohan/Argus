@@ -11,6 +11,10 @@
   "scripts": {
     "start": "turbo dev",
     "dev": "turbo dev",
+    "dev:full": "docker-compose up cognee-mcp -d && turbo dev",
+    "cognee": "docker-compose up cognee-mcp -d",
+    "cognee:stop": "docker-compose stop cognee-mcp",
+    "cognee:logs": "docker-compose logs -f cognee-mcp",
     "dev:backend": "cd apps/backend && portless run bun --watch src/server.ts",
     "dev:frontend": "cd apps/frontend && portless run next dev",
     "build": "turbo build",

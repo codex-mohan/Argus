@@ -45,7 +45,8 @@ services:
       LLM_API_KEY: "${AIMLAPI_KEY}"
       LLM_PROVIDER: "openai"
       LLM_MODEL: "gpt-4o-mini"
-      API_URL: "http://localhost:8000"
+      OPENAI_API_BASE: "https://api.aimlapi.com/v1"
+      API_URL: "http://0.0.0.0:8000"
     volumes:
       - cognee_data:/app/data
     networks:

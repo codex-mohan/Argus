@@ -348,16 +348,23 @@ export default function ReportsPage() {
                     </span>
                   )}
                 </div>
-                {/* Use actual headline — not the generic fallback */}
+                {/* Headline — strip any leading 'COMPANY: ' or 'COMPANY [LENS]:' prefix */}
                 <h2 className="font-bold text-lg text-zinc-50 leading-snug tracking-tight">
-                  {brief.headline && !brief.headline.toLowerCase().includes("multiple intelligence lenses")
-                    ? brief.headline
-                    : `${selectedCompany}: ${
-                        financeSignals.length > 0 ? financeSignals[0].headline.replace(/^[A-Z]+\s*[\[—][^\]]*[\]:]?\s*/i, "") :
-                        gtmSignals.length > 0 ? gtmSignals[0].headline.replace(/^[A-Z]+\s*[\[—][^\]]*[\]:]?\s*/i, "") :
-                        "Intelligence signals collected across active lenses"
-                      }`
-                  }
+                  {(() => {
+                    const raw = brief.headline ?? "";
+                    const isGeneric = raw.toLowerCase().includes("multiple intelligence lenses");
+                    if (isGeneric) {
+                      // Fallback to best signal headline
+                      const best = financeSignals[0] ?? gtmSignals[0] ?? securitySignals[0];
+                      return best
+                        ? best.headline.replace(/^[A-Z]+\s*\[[A-Z]+\]:\s*/i, "").trim()
+                        : "Intelligence signals collected";
+                    }
+                    // Strip leading 'NVIDIA: ' or 'NVIDIA [FINANCE]: ' patterns from brief headline
+                    return raw
+                      .replace(/^[A-Z]{2,}\s*(?:\[[A-Z]+\])?\s*:\s*/i, "")
+                      .trim();
+                  })()}
                 </h2>
               </div>
               {/* Risk bar */}
@@ -560,7 +567,39 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* Signal list */}
+                {/* TOP SIGNAL SYNTHESIS — the actual LLM insight for this lens */}
+                {lensSignals.length > 0 && lensSignals[0].synthesis &&
+                  lensSignals[0].synthesis !== lensSignals[0].headline && (
+                  <div
+                    className="px-4 py-3 border-b text-[11px] leading-relaxed text-zinc-300"
+                    style={{ borderColor: meta.border, background: `${meta.color}08` }}
+                  >
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <span className="text-[8px] font-bold uppercase tracking-widest" style={{ color: meta.color }}>Lens Analysis</span>
+                      <span className="text-[8px] text-zinc-700">· {Math.round(lensSignals[0].confidence * 100)}% confidence</span>
+                    </div>
+                    <p className="text-zinc-200 leading-relaxed">
+                      {lensSignals[0].synthesis
+                        .replace(/\s*—\s*Source:\s*https?:\/\/\S+/g, "")
+                        .replace(/^[A-Z]+\s*\[[A-Z]+\]:\s*/i, "")
+                        .trim()}
+                    </p>
+                    {/* Additional signals' synthesis if they add new insight */}
+                    {lensSignals.slice(1, 3).filter(s =>
+                      s.synthesis && s.synthesis !== s.headline &&
+                      s.synthesis !== lensSignals[0].synthesis
+                    ).map((s, i) => (
+                      <p key={i} className="mt-2 text-zinc-400 leading-relaxed border-t border-zinc-800/50 pt-2">
+                        {s.synthesis
+                          .replace(/\s*—\s*Source:\s*https?:\/\/\S+/g, "")
+                          .replace(/^[A-Z]+\s*\[[A-Z]+\]:\s*/i, "")
+                          .trim()}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {/* Signal cards — individual findings */}
                 <div className="flex-1 divide-y divide-zinc-800/50 px-4">
                   {lensSignals.length > 0 ? (
                     lensSignals.slice(0, 8).map((s) => (
