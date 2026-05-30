@@ -23,11 +23,12 @@ try {
   );
   briefWriterSystemPrompt = `You are the Argus Brief Writer. Synthesize correlated intelligence signals into executive briefs.
 The HEADLINE must contain: company name + a specific number/date/percentage + an action verb.
-Do NOT use vague phrases like "Multiple intelligence lenses have converged".
-Format: HEADLINE / SUMMARY / KEY_FINDINGS (bullets) / RISK_SCORE / RECOMMENDATION / SOURCES`;
+Do NOT use vague phrases like "Multiple intelligence lenses have converged".`;
 }
 
-import { Agent } from "@mohanscodex/spectra-agent";
+import { Agent, defineTool } from "@mohanscodex/spectra-agent";
+import type { ToolResult } from "@mohanscodex/spectra-agent";
+import { z } from "zod";
 import { resolveAgentModel } from "../config/store.ts";
 import type {
   BriefReady,
@@ -39,14 +40,37 @@ import type {
 import { emit, emitStep, on } from "../events.ts";
 import { persistBrief } from "../state.ts";
 
-function getBriefAgent(): Agent {
-  const model = resolveAgentModel("brief-writer");
-  return new Agent({
-    model,
-    systemPrompt: briefWriterSystemPrompt,
-    tools: [],
-  });
-}
+// BriefSchema — Zod schema for structured tool output
+const BriefSchema = z.object({
+  headline: z
+    .string()
+    .describe(
+      "One impactful line — company name + specific finding (number/date/name) + action. BANNED: 'Multiple intelligence lenses', 'signals converge', CIK numbers."
+    ),
+  summary: z
+    .string()
+    .describe(
+      "2-3 paragraphs. P1: what happened (cite GTM/Finance/Security by name with specific numbers). P2: cross-lens synthesis — what does it mean together. P3 optional: what to watch."
+    ),
+  keyFindings: z
+    .array(z.string())
+    .min(2)
+    .describe(
+      "Each finding: [LENS] Specific claim with number — source: domain.com"
+    ),
+  riskScore: z.number().int().min(0).max(100),
+  riskReasoning: z
+    .string()
+    .describe("One sentence explaining why this risk score"),
+  recommendation: z
+    .string()
+    .describe(
+      "2-3 specific actionable steps with timelines. Format: 1. Action because finding (timeline). 2. Action because finding (timeline)."
+    ),
+  sources: z.array(z.string()),
+});
+
+type BriefResult = z.infer<typeof BriefSchema>;
 
 on("convergence_detected", async (event: ConvergenceDetected) => {
   const { runId, company, signals, compositeScore, contradictions } = event;
@@ -88,23 +112,16 @@ on("convergence_detected", async (event: ConvergenceDetected) => {
       ? `\n\nCONTRADICTIONS DETECTED:\n${contradictions.map((c: Contradiction) => `- ${c.lensA} vs ${c.lensB}: ${c.description} (${c.severity})`).join("\n")}`
       : "";
 
-  const prompt = `Write a substantive executive intelligence brief for ${company}. Use specific numbers, names, dates, and figures from the signal data below. Do NOT be vague.
+  const prompt = `Write a substantive executive intelligence brief for ${company}. Use specific numbers, names, dates, and figures from the signal data below. Every claim must be grounded in evidence.
 
 CORRELATED SIGNALS:
 ${signalsText}${contradictionText}
 
-COMPOSITE SCORE: ${compositeScore}/100
+COMPOSITE RISK SCORE: ${compositeScore}/100
 
-REQUIRED SECTIONS:
-HEADLINE: One impactful line with a specific number or finding (e.g., "TSMC Q2 Guidance Cut by $2.4B as AI Demand Softens")
-SUMMARY: 2-3 paragraphs with specific data points from the signals. Cite which lens provided each finding. Include confidence levels.
-KEY_FINDINGS:
-- At least 3 bullets, each with a specific data point and the lens that found it
-RISK_SCORE: 0-100 (use the composite score as baseline, adjust if contradictions are severe)
-RECOMMENDATION: 2-3 specific, actionable next steps based on the data
-SOURCES: List all source URLs cited
+Be specific: if a signal mentions $942, say $942. If hiring increased 15%, say 15%. Cite which lens (GTM/Finance/Security) found each finding.
 
-BE SPECIFIC. If a signal mentions a price of $942, say $942. If hiring increased 15%, say 15%. If a filing date is mentioned, state it. Every claim must cite a source URL.`;
+You MUST call the submit_brief tool. Do NOT write a text response.`;
 
   let headline = `${company} Intelligence Brief`;
   let summary = `Multiple intelligence lenses have converged on signals for ${company}.`;
@@ -113,56 +130,50 @@ BE SPECIFIC. If a signal mentions a price of $942, say $942. If hiring increased
   let recommendation = "Monitor situation and await further intelligence.";
 
   try {
-    const events: unknown[] = [];
-    for await (const event of getBriefAgent().run(prompt)) {
-      events.push(event);
+    let capturedBrief: BriefResult | null = null;
+
+    const submitBriefTool = defineTool({
+      name: "submit_brief",
+      description:
+        "Submit the executive intelligence brief. You MUST call this tool.",
+      parameters: BriefSchema,
+      execute: async (args): Promise<ToolResult> => {
+        capturedBrief = args;
+        return { content: [{ type: "text", text: "Brief recorded." }] };
+      },
+    });
+
+    const briefAgent = new Agent({
+      model: resolveAgentModel("brief-writer"),
+      systemPrompt: briefWriterSystemPrompt,
+      tools: [submitBriefTool],
+      maxTurns: 2,
+      toolExecution: "sequential",
+    });
+
+    const fullPrompt = prompt;
+
+    for await (const event of briefAgent.run(fullPrompt)) {
+      // capturedBrief set in tool execute
+      void event;
     }
 
-    // Extract text
-    let text = "";
-    for (let i = events.length - 1; i >= 0; i--) {
-      const e = events[i] as Record<string, unknown>;
-      if (e.type === "done") {
-        const msg = e.message as Record<string, unknown>;
-        const blocks =
-          (msg.content as Array<{ type: string; text?: string }>) ?? [];
-        text = blocks
-          .filter((b) => b.type === "text")
-          .map((b) => b.text ?? "")
-          .join("");
-        break;
-      }
-    }
-
-    if (text) {
-      const hl = text.match(/HEADLINE:\s*(.+)/i);
-      const sum = text.match(
-        /SUMMARY:\s*([\s\S]+?)(?=KEY_FINDINGS:|RISK_SCORE:|$)/i
+    if (capturedBrief) {
+      const b = capturedBrief as BriefResult;
+      headline = b.headline;
+      summary = b.summary;
+      keyFindings = b.keyFindings;
+      riskScore = Math.min(100, Math.max(0, b.riskScore));
+      recommendation = b.recommendation;
+      // Merge sources
+      const extraUrls = b.sources.filter((u) => u.startsWith("http"));
+      signals.forEach((s: LensFinding) => {
+        s.sourceUrls = [...new Set([...s.sourceUrls, ...extraUrls])];
+      });
+    } else {
+      console.warn(
+        "[brief-writer] tool not called — using signal headlines as fallback"
       );
-      const kf = text.match(
-        /KEY_FINDINGS:\s*([\s\S]+?)(?=RISK_SCORE:|RECOMMENDATION:|$)/i
-      );
-      const rs = text.match(/RISK_SCORE:\s*(\d+)/i);
-      const rec = text.match(/RECOMMENDATION:\s*(.+)/i);
-
-      if (hl) {
-        headline = hl[1]!.trim();
-      }
-      if (sum) {
-        summary = sum[1]!.trim();
-      }
-      if (kf) {
-        keyFindings = kf[1]!
-          .split("\n")
-          .map((l) => l.trim().replace(/^-\s*/, ""))
-          .filter((l) => l.length > 0);
-      }
-      if (rs) {
-        riskScore = Number.parseInt(rs[1]!, 10);
-      }
-      if (rec) {
-        recommendation = rec[1]!.trim();
-      }
     }
   } catch (err) {
     console.error("[brief-writer] LLM failed:", err);

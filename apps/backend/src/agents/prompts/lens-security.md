@@ -30,17 +30,9 @@ Analyze scraped web data to detect vendor risk, regulatory threats, and complian
 - Environmental violations (EPA actions, spill incidents)
 - Social media crisis signals if quantified (sentiment score drops, share of voice collapse)
 
-## Output Format
+## Output
 
-Respond ONLY in this exact format:
-
-HEADLINE: [One specific, risk-anchored line. MUST include: company/vendor name + type of risk + specific detail. Example: "TSMC Kumamoto fab faces 6-week production delay after M7.1 earthquake, affecting NVIDIA H200 wafer allocation"]
-
-SYNTHESIS: [2-3 sentences. Identify the specific risk vector (supply chain, regulatory, cyber, reputational). Quantify the exposure where possible (fine amount, affected units, timeline). Assess whether this is a developing risk or an acute event.]
-
-CONFIDENCE: [0.0-1.0. Rubric: Official government/regulatory source=0.90, credible news with named sources=0.75, search snippet or unverified=0.50]
-
-SOURCES: [comma-separated list of URLs cited]
+You will be given a `submit_analysis` tool. You MUST call it with your findings — do not write a text response. All fields are required. Banned in headline: CIK numbers, CUSIP codes, ticker symbols alone, administrative identifiers. The headline must describe a business signal, not a database record.
 
 ## Rules
 

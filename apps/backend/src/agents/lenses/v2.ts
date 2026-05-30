@@ -9,7 +9,9 @@
  */
 
 import { DATASETS } from "@argus/shared";
-import { Agent } from "@mohanscodex/spectra-agent";
+import { Agent, defineTool } from "@mohanscodex/spectra-agent";
+import type { ToolResult } from "@mohanscodex/spectra-agent";
+import { z } from "zod";
 import { resolveAgentModel } from "../../config/store.ts";
 import type {
   FactClassified,
@@ -79,16 +81,44 @@ console.log(
   `[lenses] Loaded ${Object.keys(lensPrompts).length} lens prompts from .md files`
 );
 
-function getLensAgent(lens: "gtm" | "finance" | "security"): Agent {
-  const model = resolveAgentModel(`${lens}-lens`);
-  return new Agent({
-    model,
-    systemPrompt:
-      lensPrompts[lens] ??
-      `You are the ${lens.toUpperCase()} Intelligence Lens. Analyze facts and produce a specific finding with HEADLINE, SYNTHESIS, CONFIDENCE, and SOURCES.`,
-    tools: [],
-  });
-}
+// LensFindingSchema — Zod schema for structured tool output
+const LensFindingSchema = z.object({
+  headline: z
+    .string()
+    .describe(
+      "One specific data-anchored line. MUST include: company name + a specific number/date/name + an action verb. BANNED: CIK numbers, ticker symbols, generic admin facts."
+    ),
+  synthesis: z
+    .string()
+    .describe(
+      "2-3 sentences. Each sentence MUST cite a specific data point: price, date, percentage, headcount, name. No vague language."
+    ),
+  confidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe(
+      "0.0-1.0. Structured extractor=0.85-0.95, full article=0.65-0.80, search snippet=0.45-0.60"
+    ),
+  score: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .describe("confidence * 100 as integer"),
+  insights: z
+    .array(z.string())
+    .min(1)
+    .max(6)
+    .describe(
+      "3-5 specific findings from the data, each with a concrete data point"
+    ),
+  sourceUrls: z
+    .array(z.string().url())
+    .describe("URLs cited in the analysis"),
+});
+
+type LensFindingResult = z.infer<typeof LensFindingSchema>;
 
 // ─── Cognee Helpers ────────────────────────────────────────────────────────
 
@@ -197,18 +227,12 @@ SCRAPED WEB DATA FOR ${company.toUpperCase()}:
 ${factsText}
 
 ${recalled ? `Prior intelligence memory:\n${recalled.slice(0, 1500)}\n\n` : ""}
-
 TASK:
-1. Analyze the raw web data for key facts, numbers, trends, and signals
-2. Cross-reference information across multiple sources when available
-3. Produce:
+1. Identify the most important signals, numbers, trends in this data
+2. Cross-reference information across sources when available
+3. Be specific — if a price is $942, say $942; if hiring increased 15%, say 15%
 
-HEADLINE: (one-line specific insight — include numbers if available)
-SYNTHESIS: (2-3 sentences with specifics from the data — cite figures, dates, names)
-CONFIDENCE: (0.0-1.0 based on data quality: structured extractor=0.8+, markdown scrape=0.6+, search snippet=0.5)
-SOURCES: url1, url2
-
-BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 15%, say 15%. Use the actual numbers from the raw data.`;
+You MUST call the submit_analysis tool. Do NOT write a text response.`;
 
   // 4. LLM Analysis
   // Fallback: use best fact claim as headline if LLM doesn't respond
@@ -227,54 +251,57 @@ BE SPECIFIC. Don't be vague. If a price is $942, say $942. If hiring increased 1
   const sourceUrls = [...new Set(facts.map((f) => f.sourceUrl))];
 
   try {
-    const agent = getLensAgent(lens);
+    let captured: LensFindingResult | null = null;
+
+    const submitTool = defineTool({
+      name: "submit_analysis",
+      description:
+        "Submit your structured intelligence analysis. You MUST call this tool — do not respond with text.",
+      parameters: LensFindingSchema,
+      execute: async (args) => {
+        captured = args;
+        return { content: [{ type: "text" as const, text: "Analysis recorded." }] };
+      },
+    });
+
+    const agent = new Agent({
+      model: resolveAgentModel(`${lens}-lens`),
+      systemPrompt:
+        lensPrompts[lens] ??
+        `You are the ${lens.toUpperCase()} Intelligence Lens.`,
+      tools: [submitTool],
+      maxTurns: 2,
+      toolExecution: "sequential",
+    });
+
     console.log(
       `[lenses] ${lens}/${company}: calling LLM (${prompt.length} chars prompt)...`
     );
-    const events: unknown[] = [];
+    let eventCount = 0;
     for await (const event of agent.run(prompt)) {
-      events.push(event);
+      eventCount++;
+      // captured is set inside the tool execute callback
+      void event;
     }
     console.log(
-      `[lenses] ${lens}/${company}: LLM returned ${events.length} events`
+      `[lenses] ${lens}/${company}: LLM returned ${eventCount} events`
     );
 
-    // Extract final text
-    let text = "";
-    for (let i = events.length - 1; i >= 0; i--) {
-      const e = events[i] as Record<string, unknown>;
-      if (e.type === "done") {
-        const msg = e.message as Record<string, unknown>;
-        const blocks =
-          (msg.content as Array<{ type: string; text?: string }>) ?? [];
-        text = blocks
-          .filter((b) => b.type === "text")
-          .map((b) => b.text ?? "")
-          .join("");
-        break;
+    if (captured) {
+      const c = captured as LensFindingResult;
+      headline = c.headline;
+      synthesis = c.synthesis;
+      if (c.insights.length > 0) {
+        synthesis =
+          c.synthesis + "\n\nKey insights:\n• " + c.insights.join("\n• ");
       }
-    }
-
-    if (text) {
-      const hl = text.match(/HEADLINE:\s*(.+)/i);
-      // Capture multi-line SYNTHESIS up to the next labelled section
-      const syn = text.match(/SYNTHESIS:\s*([\.\s\S]+?)(?=\nCONFIDENCE:|\nSOURCES:|$)/i);
-      const conf = text.match(/CONFIDENCE:\s*(0\.\d+|1\.0|1)/i);
-      const src = text.match(/SOURCES:\s*(.+)/i);
-
-      if (hl) {
-        headline = hl[1]!.trim();
-      }
-      if (syn) {
-        synthesis = syn[1]!.trim();
-      }
-      if (conf) {
-        confidence = Number.parseFloat(conf[1]!);
-      }
-      if (src) {
-        const extra = src[1]!.split(/,\s*/).filter((u) => u.startsWith("http"));
-        sourceUrls.push(...extra);
-      }
+      confidence = c.confidence;
+      const extra = c.sourceUrls.filter((u) => u.startsWith("http"));
+      sourceUrls.push(...extra);
+    } else {
+      console.warn(
+        `[lenses] ${lens}/${company}: tool not called — using fact fallback`
+      );
     }
   } catch (err) {
     console.error(

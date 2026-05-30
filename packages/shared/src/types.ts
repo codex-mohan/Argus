@@ -138,6 +138,7 @@ export const IntelligenceBrief = z.object({
   ),
   risk_score: z.number().min(0).max(100),
   recommendation: z.string(),
+  sources: z.array(z.string()).optional(),
 });
 export type IntelligenceBrief = z.infer<typeof IntelligenceBrief>;
 

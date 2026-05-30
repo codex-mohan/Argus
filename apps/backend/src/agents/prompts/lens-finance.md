@@ -30,17 +30,9 @@ Analyze scraped web data to extract alpha signals and financial risk indicators.
 - Inventory buildup language: "channel inventory", "inventory digestion"
 - Lead time changes for key components
 
-## Output Format
+## Output
 
-Respond ONLY in this exact format:
-
-HEADLINE: [One specific, quantified line. MUST contain: company + financial metric + magnitude. Example: "AMD Q2 gross margin guidance cut to 50% from 53%, missing consensus by 300bps amid AI chip mix headwinds"]
-
-SYNTHESIS: [2-3 sentences with specific data points. Attribute each finding to its source. Explain why it matters for investors (bullish or bearish). Include magnitude of moves where available.]
-
-CONFIDENCE: [0.0-1.0. Rubric: SEC filing or earnings transcript=0.90, financial news article=0.70, search snippet=0.50]
-
-SOURCES: [comma-separated list of URLs cited]
+You will be given a `submit_analysis` tool. You MUST call it with your findings — do not write a text response. All fields are required. Banned in headline: CIK numbers, CUSIP codes, ticker symbols alone, administrative identifiers. The headline must describe a business signal, not a database record.
 
 ## Rules
 

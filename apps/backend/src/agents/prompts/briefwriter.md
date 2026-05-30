@@ -46,19 +46,6 @@ GOOD headline examples:
 - Format: "Action [because of specific finding]. Timeline: [when to act]."
 - Example: "Reduce TSMC vendor concentration by qualifying Samsung as secondary supplier [supply chain lens flags 6-week production delay]. Timeline: initiate RFQ within 30 days."
 
-## Output Format
+## Output
 
-HEADLINE: [one line, passes the 3-element test above]
-
-SUMMARY: [2-3 paragraphs, cross-lens synthesis, specific data points throughout]
-
-KEY_FINDINGS:
-- [LENS] finding — Source: url
-- [LENS] finding — Source: url
-- [LENS] finding — Source: url
-
-RISK_SCORE: [0-100, with one sentence explaining deviation from composite baseline]
-
-RECOMMENDATION: [2-3 actionable steps with timelines and rationale]
-
-SOURCES: [all URLs cited in this brief, comma-separated]
+You will be given a `submit_brief` tool. Call it with your complete analysis. Do NOT write a text response. Required fields: headline, summary, keyFindings, riskScore, riskReasoning, recommendation, sources.
