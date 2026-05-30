@@ -330,8 +330,8 @@ async function connectMcpServersAsync(): Promise<void> {
   // Start pipeline only if Bright Data is connected
   if (brightDataTools > 0) {
     clearMemoryCache();
-    startPipeline(5);
-    console.log("  Pipeline: ✓ started (5-min interval)");
+    // startPipeline(5); // DISABLED: Prevents automatic credit drain. Run manually via UI.
+    console.log("  Pipeline: ✓ ready (manual triggers only)");
   } else {
     console.warn("  Pipeline: ✗ not started — Bright Data MCP unavailable");
   }
