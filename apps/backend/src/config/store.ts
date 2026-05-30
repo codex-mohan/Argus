@@ -69,9 +69,14 @@ const DEFAULT_CONFIG: Array<{
   description: string;
 }> = [
   {
+    key: "pipeline_mode",
+    value: "manual",
+    description: "Pipeline run mode: manual | scheduled | live",
+  },
+  {
     key: "poll_interval_minutes",
     value: "5",
-    description: "How often to run monitoring cycles",
+    description: "How often to run monitoring cycles (only used when pipeline_mode=scheduled)",
   },
   {
     key: "cache_ttl_price",
@@ -470,6 +475,20 @@ export function setPipelineConfig(key: string, value: string): void {
     new Date().toISOString(),
     key,
   ]);
+}
+
+// ─── Pipeline Mode Helpers ───────────────────────────────────────────────────
+
+export type PipelineMode = "manual" | "scheduled" | "live";
+
+export function getPipelineMode(): PipelineMode {
+  const raw = getPipelineConfig("pipeline_mode");
+  if (raw === "scheduled" || raw === "live" || raw === "manual") return raw;
+  return "manual";
+}
+
+export function setPipelineMode(mode: PipelineMode): void {
+  setPipelineConfig("pipeline_mode", mode);
 }
 
 // ─── User Settings ─────────────────────────────────────────────────────────

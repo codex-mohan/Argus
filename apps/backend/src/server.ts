@@ -47,6 +47,13 @@ import {
   triggerManualRun,
   triggerReplay,
 } from "./pipeline.ts";
+import {
+  type PipelineMode,
+  getPipelineConfig,
+  getPipelineMode,
+  setPipelineConfig,
+  setPipelineMode,
+} from "./config/store.ts";
 import { registerAimlApiProvider } from "./providers/aimlapi.ts";
 import {
   clearAllData,
@@ -246,6 +253,65 @@ async function handleReplay(req: Request): Promise<Response> {
   }
 }
 
+async function handlePipelineMode(req: Request): Promise<Response> {
+  if (req.method === "GET") {
+    const mode = getPipelineMode();
+    const interval = Number(getPipelineConfig("poll_interval_minutes") ?? "5");
+    return jsonResponse({ mode, interval, running: isPipelineRunning() });
+  }
+
+  if (req.method === "POST" || req.method === "PATCH") {
+    try {
+      const body = (await req.json()) as {
+        mode?: string;
+        interval?: number;
+      };
+      const mode = body.mode;
+      const interval = body.interval;
+
+      if (mode && !["manual", "scheduled", "live"].includes(mode)) {
+        return jsonResponse(
+          { error: "mode must be: manual | scheduled | live" },
+          400
+        );
+      }
+
+      // Stop any running pipeline first
+      stopPipeline();
+
+      if (interval && Number.isFinite(interval) && interval > 0) {
+        setPipelineConfig("poll_interval_minutes", String(interval));
+      }
+
+      if (mode) {
+        setPipelineMode(mode as PipelineMode);
+        const resolvedInterval = Number(
+          getPipelineConfig("poll_interval_minutes") ?? "5"
+        );
+
+        if (mode === "scheduled") {
+          startPipeline(resolvedInterval);
+        } else if (mode === "live") {
+          startPipeline(1);
+        }
+        // manual = stay stopped
+      }
+
+      return jsonResponse({
+        success: true,
+        mode: getPipelineMode(),
+        interval: Number(getPipelineConfig("poll_interval_minutes") ?? "5"),
+        running: isPipelineRunning(),
+      });
+    } catch {
+      return jsonResponse({ error: "Invalid JSON" }, 400);
+    }
+  }
+
+  return jsonResponse({ error: "Method not allowed" }, 405);
+}
+
+
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 // ─── MCP State (updated async) ───────────────────────────────────────────
@@ -327,11 +393,20 @@ async function connectMcpServersAsync(): Promise<void> {
     },
   };
 
-  // Start pipeline only if Bright Data is connected
+  // Start pipeline based on persisted pipeline_mode
   if (brightDataTools > 0) {
-    clearMemoryCache();
-    // startPipeline(5); // DISABLED: Prevents automatic credit drain. Run manually via UI.
-    console.log("  Pipeline: ✓ ready (manual triggers only)");
+    const mode = getPipelineMode();
+    const interval = Number(getPipelineConfig("poll_interval_minutes") ?? "5");
+    if (mode === "scheduled") {
+      startPipeline(interval);
+      console.log(`  Pipeline: ✓ started in SCHEDULED mode (every ${interval} min)`);
+    } else if (mode === "live") {
+      startPipeline(1); // live = 1-minute refresh
+      console.log("  Pipeline: ✓ started in LIVE mode (every 1 min)");
+    } else {
+      // manual — do NOT auto-start
+      console.log("  Pipeline: ✓ ready in MANUAL mode (trigger from dashboard)");
+    }
   } else {
     console.warn("  Pipeline: ✗ not started — Bright Data MCP unavailable");
   }
@@ -795,6 +870,10 @@ async function main() {
           return handleTriggerRun(req);
         case "POST /api/replay":
           return handleReplay(req);
+        case "GET /api/pipeline/mode":
+        case "POST /api/pipeline/mode":
+        case "PATCH /api/pipeline/mode":
+          return handlePipelineMode(req);
 
         // ─── Settings / Config ─────────────────────────────────────────────
         case "GET /api/models":

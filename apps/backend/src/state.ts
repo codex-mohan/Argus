@@ -340,7 +340,7 @@ export function getAgentStatuses(): Array<{
 
 // ─── Watchlist ─────────────────────────────────────────────────────────────
 
-let watchlist: string[] = ["NVIDIA", "AMD", "TSMC"];
+let watchlist: string[] = ["NVIDIA", "AMD"];
 
 export function getWatchlist(): string[] {
   return [...watchlist];

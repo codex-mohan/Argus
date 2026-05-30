@@ -426,7 +426,7 @@ on("monitor_tick", async (event: MonitorTick) => {
   );
 
   const search = await smartSearch(
-    `${company} supply chain supplier TSMC Samsung manufacturing delay 2026`,
+    `${company} supply chain supplier manufacturing delay disruption 2026`,
     "supplier"
   );
 

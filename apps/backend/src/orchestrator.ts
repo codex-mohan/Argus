@@ -27,7 +27,7 @@ interface BriefEntry {
 const store: SignalStore = {
   signals: [],
   briefs: new Map(),
-  watchlist: ["NVIDIA", "AMD", "TSMC"],
+  watchlist: ["NVIDIA", "AMD"],
   listeners: new Set(),
   stepListeners: new Set(),
   analysisListeners: new Set(),
